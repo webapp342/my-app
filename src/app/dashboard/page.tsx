@@ -4,6 +4,8 @@ import { useSearchParams } from 'next/navigation'
 import { useState, useEffect, Suspense } from 'react'
 import Link from 'next/link'
 import { useBalanceTracking } from '@/hooks/useBalanceTracking'
+import VirtualCard from '@/components/VirtualCard'
+import { VirtualCard as VirtualCardType } from '@/lib/virtual-card'
 
 function DashboardContent() {
   const searchParams = useSearchParams()
@@ -11,6 +13,9 @@ function DashboardContent() {
   const [priceLoading, setPriceLoading] = useState(false)
   const [mounted, setMounted] = useState(false)
   const [userId, setUserId] = useState<string | null>(null)
+  const [virtualCards, setVirtualCards] = useState<VirtualCardType[]>([])
+  const [cardsLoading, setCardsLoading] = useState(false)
+  const [showFullCardNumber, setShowFullCardNumber] = useState(false)
   
   const address = searchParams.get('address')
   const username = searchParams.get('username')
@@ -48,6 +53,32 @@ function DashboardContent() {
 
     fetchUserId()
   }, [address, mounted])
+
+  // Fetch user's virtual cards
+  useEffect(() => {
+    const fetchVirtualCards = async () => {
+      if (!userId || !mounted) return
+      
+      setCardsLoading(true)
+      try {
+        const response = await fetch(`/api/virtual-cards?userId=${userId}`)
+        const data = await response.json()
+        
+        if (response.ok && data.success) {
+          setVirtualCards(data.cards || [])
+          console.log('[DASHBOARD] Found virtual cards:', data.cards?.length || 0)
+        } else {
+          console.warn('[DASHBOARD] Could not fetch virtual cards:', data.error)
+        }
+      } catch (error) {
+        console.error('[DASHBOARD] Error fetching virtual cards:', error)
+      } finally {
+        setCardsLoading(false)
+      }
+    }
+
+    fetchVirtualCards()
+  }, [userId, mounted])
 
   // Calculate total USD value from stored balances
   useEffect(() => {
@@ -152,6 +183,12 @@ function DashboardContent() {
                 className="bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium py-2 px-4 rounded-lg transition duration-200"
               >
                 Home
+              </Link>
+              <Link
+                href={`/presale?address=${address}&username=${username}&userId=${userId}`}
+                className="bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white font-medium py-2 px-4 rounded-lg transition duration-200"
+              >
+                Presale
               </Link>
             </div>
           </div>
@@ -344,6 +381,49 @@ function DashboardContent() {
               <div className="text-center py-8">
                 <div className="text-gray-400 mb-2">No stored balances found</div>
                 <div className="text-sm text-gray-500">Click &quot;Sync Transactions&quot; to track your token balances</div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Virtual Cards */}
+        {userId && (
+          <div className="bg-white rounded-2xl shadow-xl p-6 mb-6">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-lg font-semibold text-gray-900">Virtual Cards</h2>
+              <button
+                onClick={() => {
+                  // TODO: Implement create new card functionality
+                  console.log('Create new card clicked')
+                }}
+                className="bg-blue-100 hover:bg-blue-200 text-blue-700 font-medium py-2 px-4 rounded-lg transition duration-200 text-sm"
+              >
+                + New Card
+              </button>
+            </div>
+
+            {cardsLoading ? (
+              <div className="flex justify-center py-8">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+              </div>
+            ) : virtualCards.length > 0 ? (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {virtualCards.map((card) => (
+                  <VirtualCard
+                    key={card.id}
+                    card={card}
+                    showFullNumber={showFullCardNumber}
+                    onToggleVisibility={() => setShowFullCardNumber(!showFullCardNumber)}
+                    className="max-w-sm"
+                  />
+                ))}
+              </div>
+            ) : (
+              <div className="text-center py-8">
+                <div className="text-gray-400 mb-2">No virtual cards found</div>
+                <div className="text-sm text-gray-500">
+                  {address ? 'Your virtual card should have been created automatically when you created your wallet.' : 'Create a wallet to get your virtual card.'}
+                </div>
               </div>
             )}
           </div>

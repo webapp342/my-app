@@ -36,9 +36,30 @@ export async function GET(request: NextRequest) {
       )
     }
 
+    // Transform database response to match VirtualCard interface
+    const transformedCards = (cards || []).map(card => ({
+      id: card.id,
+      userId: card.user_id,
+      walletId: card.wallet_id,
+      cardNumber: card.card_number,
+      cardHolderName: card.card_holder_name,
+      expiryMonth: card.expiry_month,
+      expiryYear: card.expiry_year,
+      cvv: card.cvv,
+      cardType: card.card_type,
+      cardBrand: card.card_brand,
+      status: card.status,
+      dailyLimit: card.daily_limit,
+      monthlyLimit: card.monthly_limit,
+      totalSpent: card.total_spent,
+      createdAt: card.created_at,
+      updatedAt: card.updated_at,
+      lastUsedAt: card.last_used_at
+    }))
+
     return NextResponse.json({
       success: true,
-      cards: cards || []
+      cards: transformedCards
     })
 
   } catch (error) {

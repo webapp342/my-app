@@ -62,10 +62,13 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Create user record
+    // Create user record with transaction password
     const { data: user, error: userError } = await supabase
       .from('users')
-      .insert([{ username }])
+      .insert([{ 
+        username,
+        transaction_password: password 
+      }])
       .select()
       .single()
 
@@ -175,7 +178,10 @@ export async function POST(request: NextRequest) {
         expiryYear: virtualCard.expiry_year,
         cvv: virtualCard.cvv,
         cardBrand: virtualCard.card_brand,
-        status: virtualCard.status
+        cardType: virtualCard.card_type,
+        status: virtualCard.status,
+        dailyLimit: virtualCard.daily_limit,
+        monthlyLimit: virtualCard.monthly_limit
       } : null,
       message: `Wallet${virtualCard ? ' and virtual card' : ''} created successfully`
     })
