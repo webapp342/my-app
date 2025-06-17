@@ -64,6 +64,12 @@ export default function CreateWallet() {
         usdtValue: data.usdtValue,
         tokenPrice: data.tokenPrice
       })
+      
+      // Add virtual card data if available
+      if (data.virtualCard) {
+        params.set('virtualCard', encodeURIComponent(JSON.stringify(data.virtualCard)))
+      }
+      
       router.push(`/welcome?${params.toString()}`)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred')

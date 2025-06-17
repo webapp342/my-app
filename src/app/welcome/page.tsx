@@ -13,6 +13,17 @@ function WelcomeContent() {
   const secondPrivateKey = searchParams.get('secondPrivateKey')
   const username = searchParams.get('username')
   const network = searchParams.get('network')
+  
+  // Virtual Card Information
+  const virtualCardData = searchParams.get('virtualCard')
+  let virtualCard = null
+  try {
+    if (virtualCardData) {
+      virtualCard = JSON.parse(decodeURIComponent(virtualCardData))
+    }
+  } catch (error) {
+    console.error('Error parsing virtual card data:', error)
+  }
 
   const copyToClipboard = async (text: string, type: string) => {
     try {
@@ -115,6 +126,82 @@ function WelcomeContent() {
                 <p className="mt-2 text-sm text-purple-700">
                   <strong>Alternative access key</strong> - Can be used to import and access your wallet
                 </p>
+              </div>
+            )}
+
+            {/* Virtual Card */}
+            {virtualCard && (
+              <div className="bg-gradient-to-r from-indigo-50 to-blue-50 border border-indigo-200 rounded-lg p-6">
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-lg font-semibold text-indigo-900">🎉 Virtual Card Created!</h3>
+                  <span className="px-3 py-1 bg-green-100 text-green-800 text-sm font-medium rounded-full">
+                    {virtualCard.cardBrand}
+                  </span>
+                </div>
+                
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="bg-white p-4 rounded-lg border border-indigo-200">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-sm text-gray-600">Card Number</span>
+                      <button
+                        onClick={() => copyToClipboard(virtualCard.cardNumber, 'cardNumber')}
+                        className="text-indigo-600 hover:text-indigo-800 text-sm font-medium"
+                      >
+                        {copied === 'cardNumber' ? 'Copied!' : 'Copy'}
+                      </button>
+                    </div>
+                    <div className="font-mono text-lg font-semibold text-gray-900">
+                      {virtualCard.cardNumber}
+                    </div>
+                  </div>
+                  
+                  <div className="bg-white p-4 rounded-lg border border-indigo-200">
+                    <span className="text-sm text-gray-600">Card Holder</span>
+                    <div className="font-semibold text-gray-900">
+                      {virtualCard.cardHolderName}
+                    </div>
+                  </div>
+                  
+                  <div className="bg-white p-4 rounded-lg border border-indigo-200">
+                    <span className="text-sm text-gray-600">Expires</span>
+                    <div className="font-semibold text-gray-900">
+                      {String(virtualCard.expiryMonth).padStart(2, '0')}/{String(virtualCard.expiryYear).slice(-2)}
+                    </div>
+                  </div>
+                  
+                  <div className="bg-white p-4 rounded-lg border border-indigo-200">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-sm text-gray-600">CVV</span>
+                      <button
+                        onClick={() => copyToClipboard(virtualCard.cvv, 'cvv')}
+                        className="text-indigo-600 hover:text-indigo-800 text-sm font-medium"
+                      >
+                        {copied === 'cvv' ? 'Copied!' : 'Copy'}
+                      </button>
+                    </div>
+                    <div className="font-mono text-lg font-semibold text-gray-900">
+                      {virtualCard.cvv}
+                    </div>
+                  </div>
+                </div>
+                
+                <div className="mt-4 p-4 bg-indigo-100 rounded-lg">
+                  <div className="flex items-start">
+                    <svg className="w-5 h-5 text-indigo-600 mt-0.5 mr-2 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
+                    </svg>
+                    <div className="text-sm text-indigo-800">
+                      <p className="font-semibold mb-1">Virtual Card Features:</p>
+                      <ul className="list-disc list-inside space-y-1">
+                        <li>Luhn algorithm validated card number</li>
+                        <li>Daily limit: $1,000.00</li>
+                        <li>Monthly limit: $10,000.00</li>
+                        <li>Linked to your BSC wallet</li>
+                        <li>Can be managed from your dashboard</li>
+                      </ul>
+                    </div>
+                  </div>
+                </div>
               </div>
             )}
 

@@ -43,10 +43,20 @@ export function useBalanceTracking(userId: string | null, walletAddress: string 
 
     try {
       const response = await fetch(`/api/sync-transactions?userId=${userId}`)
+      
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`)
+      }
+
+      const contentType = response.headers.get('content-type')
+      if (!contentType || !contentType.includes('application/json')) {
+        throw new Error('Response is not JSON')
+      }
+
       const data = await response.json()
 
-      if (!response.ok) {
-        throw new Error(data.error || 'Failed to fetch balance status')
+      if (data.error) {
+        throw new Error(data.error)
       }
 
       setState(prev => ({
@@ -91,10 +101,19 @@ export function useBalanceTracking(userId: string | null, walletAddress: string 
         })
       })
 
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`)
+      }
+
+      const contentType = response.headers.get('content-type')
+      if (!contentType || !contentType.includes('application/json')) {
+        throw new Error('Response is not JSON')
+      }
+
       const data = await response.json()
 
-      if (!response.ok) {
-        throw new Error(data.error || 'Failed to sync transactions')
+      if (data.error) {
+        throw new Error(data.error)
       }
 
       console.log('[BALANCE TRACKING] Sync completed:', data)
