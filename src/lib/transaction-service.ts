@@ -1,0 +1,270 @@
+import { ethers } from 'ethers'
+import { Transaction, RawTransaction, TokenTransfer, NetworkConfig } from '@/types/transaction'
+
+// Network configurations with explorer API details
+const NETWORKS: Record<string, NetworkConfig> = {
+  ethereum: {
+    name: 'Ethereum Mainnet',
+    chainId: 1,
+    nativeCurrency: 'ETH',
+    explorerUrl: 'https://etherscan.io',
+    apiKey: process.env.ETHERSCAN_API_KEY || ''
+  },
+  bsc: {
+    name: 'BSC Mainnet',
+    chainId: 56,
+    nativeCurrency: 'BNB',
+    explorerUrl: 'https://bscscan.com',
+    apiKey: process.env.BSCSCAN_API_KEY || ''
+  }
+}
+
+// ERC20 Transfer event signature
+const ERC20_TRANSFER_TOPIC = '0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef'
+
+/**
+ * Detects network based on address characteristics or explicit network parameter
+ */
+export function detectNetwork(address: string, networkParam?: string): 'ethereum' | 'bsc' {
+  if (networkParam && ['ethereum', 'bsc'].includes(networkParam)) {
+    return networkParam as 'ethereum' | 'bsc'
+  }
+  
+  // Default to Ethereum for now (could add more sophisticated detection)
+  return 'ethereum'
+}
+
+/**
+ * Creates ethers provider based on network
+ */
+function createProvider(network: 'ethereum' | 'bsc'): ethers.EtherscanProvider {
+  const config = NETWORKS[network]
+  
+  if (!config.apiKey) {
+    throw new Error(`Missing API key for ${network} network`)
+  }
+
+  if (network === 'ethereum') {
+    return new ethers.EtherscanProvider('homestead', config.apiKey)
+  } else {
+    // For BSC, we'll use a custom provider since ethers doesn't have built-in BSC support
+    return new ethers.EtherscanProvider('homestead', config.apiKey)
+  }
+}
+
+/**
+ * Fetches transaction history for an address using EtherscanProvider
+ */
+export async function fetchTransactionHistory(
+  address: string,
+  network: 'ethereum' | 'bsc',
+  page: number = 1,
+  limit: number = 20
+): Promise<{
+  transactions: Transaction[]
+  total: number
+  hasMore: boolean
+}> {
+  try {
+    const provider = createProvider(network)
+    const networkConfig = NETWORKS[network]
+
+    // Fetch transaction history
+    // Note: EtherscanProvider has limitations, so we'll use direct API calls for better control
+    const transactions = await fetchTransactionsDirectly(address, network, page, limit)
+    
+    // Fetch token transfers for the same address
+    const tokenTransfers = await fetchTokenTransfers(address, network, page, limit)
+    
+    // Categorize and normalize transactions
+    const categorizedTransactions = await categorizeTransactions(
+      transactions,
+      tokenTransfers,
+      address,
+      network
+    )
+
+    return {
+      transactions: categorizedTransactions,
+      total: categorizedTransactions.length,
+      hasMore: categorizedTransactions.length === limit
+    }
+
+  } catch (error) {
+    console.error('Error fetching transaction history:', error)
+    throw new Error('Failed to fetch transaction history')
+  }
+}
+
+/**
+ * Directly calls Etherscan/BSCScan API for better control over pagination and data
+ */
+async function fetchTransactionsDirectly(
+  address: string,
+  network: 'ethereum' | 'bsc',
+  page: number,
+  limit: number
+): Promise<RawTransaction[]> {
+  const config = NETWORKS[network]
+  const baseUrl = network === 'ethereum' 
+    ? 'https://api.etherscan.io/api'
+    : 'https://api.bscscan.com/api'
+
+  const url = `${baseUrl}?module=account&action=txlist&address=${address}&startblock=0&endblock=99999999&page=${page}&offset=${limit}&sort=desc&apikey=${config.apiKey}`
+
+  const response = await fetch(url)
+  const data = await response.json()
+
+  if (data.status === '0' && data.message === 'No transactions found') {
+    return []
+  }
+
+  if (data.status === '0') {
+    throw new Error(data.message || 'Failed to fetch transactions')
+  }
+
+  return data.result.map((tx: any): RawTransaction => ({
+    hash: tx.hash,
+    blockNumber: parseInt(tx.blockNumber),
+    from: tx.from,
+    to: tx.to || '',
+    value: tx.value,
+    timestamp: parseInt(tx.timeStamp),
+    gasUsed: tx.gasUsed,
+    gasPrice: tx.gasPrice
+  }))
+}
+
+/**
+ * Fetches ERC20 token transfers for an address
+ */
+async function fetchTokenTransfers(
+  address: string,
+  network: 'ethereum' | 'bsc',
+  page: number,
+  limit: number
+): Promise<TokenTransfer[]> {
+  const config = NETWORKS[network]
+  const baseUrl = network === 'ethereum' 
+    ? 'https://api.etherscan.io/api'
+    : 'https://api.bscscan.com/api'
+
+  const url = `${baseUrl}?module=account&action=tokentx&address=${address}&page=${page}&offset=${limit}&sort=desc&apikey=${config.apiKey}`
+
+  try {
+    const response = await fetch(url)
+    const data = await response.json()
+
+    if (data.status === '0' && data.message === 'No transactions found') {
+      return []
+    }
+
+    if (data.status === '0') {
+      console.error('Token transfer fetch error:', data.message)
+      return []
+    }
+
+    return data.result.map((tx: any): TokenTransfer => {
+      const decimals = parseInt(tx.tokenDecimal) || 18
+      const amount = tx.value
+      const formattedAmount = ethers.formatUnits(amount, decimals)
+
+      return {
+        hash: tx.hash,
+        from: tx.from,
+        to: tx.to,
+        tokenAddress: tx.contractAddress,
+        tokenSymbol: tx.tokenSymbol || 'UNKNOWN',
+        tokenName: tx.tokenName || 'Unknown Token',
+        tokenDecimals: decimals,
+        amount: amount,
+        formattedAmount: parseFloat(formattedAmount).toFixed(6),
+        blockNumber: parseInt(tx.blockNumber),
+        timestamp: parseInt(tx.timeStamp)
+      }
+    })
+  } catch (error) {
+    console.error('Error fetching token transfers:', error)
+    return []
+  }
+}
+
+/**
+ * Categorizes transactions as deposit, withdraw, or token_transfer
+ */
+async function categorizeTransactions(
+  transactions: RawTransaction[],
+  tokenTransfers: TokenTransfer[],
+  userAddress: string,
+  network: 'ethereum' | 'bsc'
+): Promise<Transaction[]> {
+  const networkConfig = NETWORKS[network]
+  const categorized: Transaction[] = []
+
+  // Process regular ETH/BNB transactions
+  for (const tx of transactions) {
+    const isDeposit = tx.to.toLowerCase() === userAddress.toLowerCase()
+    const isWithdraw = tx.from.toLowerCase() === userAddress.toLowerCase()
+
+    if (isDeposit || isWithdraw) {
+      const valueInEth = ethers.formatEther(tx.value)
+      
+      categorized.push({
+        hash: tx.hash,
+        timestamp: new Date(tx.timestamp * 1000).toISOString(),
+        from: tx.from,
+        to: tx.to,
+        value: parseFloat(valueInEth).toFixed(6),
+        type: isDeposit ? 'deposit' : 'withdraw',
+        gasUsed: tx.gasUsed,
+        gasPrice: tx.gasPrice,
+        blockNumber: tx.blockNumber,
+        network
+      })
+    }
+  }
+
+  // Process token transfers
+  for (const transfer of tokenTransfers) {
+    const isDeposit = transfer.to.toLowerCase() === userAddress.toLowerCase()
+    const isWithdraw = transfer.from.toLowerCase() === userAddress.toLowerCase()
+
+    if (isDeposit || isWithdraw) {
+      categorized.push({
+        hash: transfer.hash,
+        timestamp: new Date(transfer.timestamp * 1000).toISOString(),
+        from: transfer.from,
+        to: transfer.to,
+        value: '0.000000', // No native currency for token transfers
+        type: 'token_transfer',
+        tokenSymbol: transfer.tokenSymbol,
+        tokenAmount: transfer.formattedAmount,
+        tokenDecimals: transfer.tokenDecimals,
+        blockNumber: transfer.blockNumber,
+        network
+      })
+    }
+  }
+
+  // Sort by block number (most recent first)
+  return categorized.sort((a, b) => b.blockNumber - a.blockNumber)
+}
+
+/**
+ * Gets explorer URL for a transaction
+ */
+export function getExplorerUrl(hash: string, network: 'ethereum' | 'bsc'): string {
+  const config = NETWORKS[network]
+  return `${config.explorerUrl}/tx/${hash}`
+}
+
+/**
+ * Validates if an address is valid Ethereum address
+ */
+export function isValidAddress(address: string): boolean {
+  try {
+    return ethers.isAddress(address)
+  } catch {
+    return false
+  }
+} 
