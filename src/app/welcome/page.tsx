@@ -12,10 +12,6 @@ function WelcomeContent() {
   const privateKey = searchParams.get('privateKey')
   const username = searchParams.get('username')
   const network = searchParams.get('network')
-  const balance = searchParams.get('balance')
-  const symbol = searchParams.get('symbol')
-  const usdtValue = searchParams.get('usdtValue')
-  const tokenPrice = searchParams.get('tokenPrice')
 
   const copyToClipboard = async (text: string, type: string) => {
     try {

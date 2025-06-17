@@ -19,8 +19,8 @@ const NETWORKS: Record<string, NetworkConfig> = {
   }
 }
 
-// ERC20 Transfer event signature
-const ERC20_TRANSFER_TOPIC = '0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef'
+// ERC20 Transfer event signature (currently unused but kept for future features)
+// const ERC20_TRANSFER_TOPIC = '0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef'
 
 /**
  * Detects network based on address characteristics or explicit network parameter
@@ -35,22 +35,22 @@ export function detectNetwork(address: string, networkParam?: string): 'ethereum
 }
 
 /**
- * Creates ethers provider based on network
+ * Creates ethers provider based on network (currently unused but kept for future features)
  */
-function createProvider(network: 'ethereum' | 'bsc'): ethers.EtherscanProvider {
-  const config = NETWORKS[network]
-  
-  if (!config.apiKey) {
-    throw new Error(`Missing API key for ${network} network`)
-  }
-
-  if (network === 'ethereum') {
-    return new ethers.EtherscanProvider('homestead', config.apiKey)
-  } else {
-    // For BSC, we'll use a custom provider since ethers doesn't have built-in BSC support
-    return new ethers.EtherscanProvider('homestead', config.apiKey)
-  }
-}
+// function createProvider(network: 'ethereum' | 'bsc'): ethers.EtherscanProvider {
+//   const config = NETWORKS[network]
+//   
+//   if (!config.apiKey) {
+//     throw new Error(`Missing API key for ${network} network`)
+//   }
+//
+//   if (network === 'ethereum') {
+//     return new ethers.EtherscanProvider('homestead', config.apiKey)
+//   } else {
+//     // For BSC, we'll use a custom provider since ethers doesn't have built-in BSC support
+//     return new ethers.EtherscanProvider('homestead', config.apiKey)
+//   }
+// }
 
 /**
  * Fetches transaction history for an address using EtherscanProvider
@@ -66,9 +66,6 @@ export async function fetchTransactionHistory(
   hasMore: boolean
 }> {
   try {
-    const provider = createProvider(network)
-    const networkConfig = NETWORKS[network]
-
     // Fetch transaction history
     // Note: EtherscanProvider has limitations, so we'll use direct API calls for better control
     const transactions = await fetchTransactionsDirectly(address, network, page, limit)
@@ -123,6 +120,7 @@ async function fetchTransactionsDirectly(
     throw new Error(data.message || 'Failed to fetch transactions')
   }
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   return data.result.map((tx: any): RawTransaction => ({
     hash: tx.hash,
     blockNumber: parseInt(tx.blockNumber),
@@ -164,6 +162,7 @@ async function fetchTokenTransfers(
       return []
     }
 
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     return data.result.map((tx: any): TokenTransfer => {
       const decimals = parseInt(tx.tokenDecimal) || 18
       const amount = tx.value
@@ -198,7 +197,6 @@ async function categorizeTransactions(
   userAddress: string,
   network: 'ethereum' | 'bsc'
 ): Promise<Transaction[]> {
-  const networkConfig = NETWORKS[network]
   const categorized: Transaction[] = []
 
   // Process regular ETH/BNB transactions

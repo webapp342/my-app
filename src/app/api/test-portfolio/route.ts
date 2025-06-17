@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getWalletBalance, isValidAddress } from '@/lib/blockchain'
-import { calculateUSDTValue, getNativeCurrencySymbol, fetchTokenPrice } from '@/lib/binance-price'
+import { calculateUSDTValue, fetchTokenPrice } from '@/lib/binance-price'
 
 export async function GET(request: NextRequest) {
   try {
@@ -35,7 +35,7 @@ export async function GET(request: NextRequest) {
 
     // Test 3: Calculate USD value
     console.log('[TEST PORTFOLIO] Testing USD value calculation...')
-    const usdtData = await calculateUSDTValue(balanceData.formatted, 'BNB', 'BSC_MAINNET')
+    const usdtData = await calculateUSDTValue(balanceData.balanceFormatted, 'BNB', 'BSC_MAINNET')
     console.log('[TEST PORTFOLIO] USD value result:', usdtData)
 
     // Test 4: BSCScan API availability
@@ -54,7 +54,7 @@ export async function GET(request: NextRequest) {
       results: {
         bnbBalance: {
           raw: balanceData.balance,
-          formatted: balanceData.formatted,
+          formatted: balanceData.balanceFormatted,
           symbol: balanceData.symbol
         },
         bnbPrice: bnbPrice,

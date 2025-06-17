@@ -117,9 +117,9 @@ export async function GET(request: NextRequest) {
           transactions: [],
           total: 0,
           page: 1,
-          limit,
+          limit: 20,
           hasMore: false,
-          network: network || 'ethereum'
+          network: 'ethereum'
         })
       }
     }

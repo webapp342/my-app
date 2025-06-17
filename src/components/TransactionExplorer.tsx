@@ -51,21 +51,24 @@ export default function TransactionExplorer({
       }
 
       const response = await fetch(`/api/transactions?${params.toString()}`)
-      const data: TransactionResponse = await response.json()
+      const data = await response.json()
 
       if (!response.ok) {
-        throw new Error(data.error || 'Failed to fetch transactions')
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        throw new Error((data as any).error || 'Failed to fetch transactions')
       }
 
-      setDetectedNetwork(data.network)
-      setTotalTransactions(data.total)
-      setHasMore(data.hasMore)
+      const transactionData = data as TransactionResponse
+
+      setDetectedNetwork(transactionData.network)
+      setTotalTransactions(transactionData.total)
+      setHasMore(transactionData.hasMore)
       setCurrentPage(page)
 
       if (append) {
-        setTransactions(prev => [...prev, ...data.transactions])
+        setTransactions(prev => [...prev, ...transactionData.transactions])
       } else {
-        setTransactions(data.transactions)
+        setTransactions(transactionData.transactions)
       }
 
     } catch (err) {
@@ -95,6 +98,7 @@ export default function TransactionExplorer({
       setCurrentPage(1)
       fetchTransactions(1, false)
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [address, network])
 
   /**
@@ -211,7 +215,7 @@ export default function TransactionExplorer({
             </svg>
             <h3 className="mt-2 text-sm font-medium text-gray-900">No transactions found</h3>
             <p className="mt-1 text-sm text-gray-500">
-              This address doesn't have any recorded transactions.
+              This address doesn&apos;t have any recorded transactions.
             </p>
           </div>
         ) : (

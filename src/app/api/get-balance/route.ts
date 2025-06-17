@@ -34,7 +34,7 @@ export async function GET(request: NextRequest) {
     // Get native currency symbol and calculate USDT value
     const tokenSymbol = getNativeCurrencySymbol(network)
     const usdtData = await calculateUSDTValue(
-      balanceData.balance.formatted,
+      balanceData.balanceFormatted,
       tokenSymbol,
       network
     )
@@ -42,14 +42,14 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({
       address,
       network,
-      balance: {
-        ...balanceData.balance,
-        usdt: {
-          value: usdtData.usdtValue,
-          formatted: usdtData.formattedValue,
-          price: usdtData.price,
-          tokenSymbol
-        }
+      balance: balanceData.balance,
+      balanceFormatted: balanceData.balanceFormatted,
+      symbol: balanceData.symbol,
+      usdt: {
+        value: usdtData.usdtValue,
+        formatted: usdtData.formattedValue,
+        price: usdtData.price,
+        tokenSymbol
       },
       timestamp: new Date().toISOString()
     })

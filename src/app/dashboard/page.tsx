@@ -60,11 +60,17 @@ function DashboardContent() {
         const data = await response.json()
         
         if (response.ok) {
+          console.log('Balance API response:', data)
           setBalanceData({
-            balanceFormatted: data.balance.formatted,
-            symbol: data.balance.symbol,
-            network: data.network,
-            usdt: data.balance.usdt
+            balanceFormatted: data.balanceFormatted || '0.000000',
+            symbol: data.symbol || 'BNB',
+            network: data.network || 'BSC Mainnet',
+            usdt: data.usdt || {
+              value: 0,
+              formatted: '$0.00',
+              price: 0,
+              tokenSymbol: 'BNB'
+            }
           })
         } else {
           console.error('Error fetching balance:', data.error)
@@ -150,10 +156,10 @@ function DashboardContent() {
               ) : (
                 <>
                   <p className="text-3xl font-bold text-gray-900">{balanceData.balanceFormatted} {balanceData.symbol}</p>
-                  <p className="text-xl font-semibold text-green-600 mt-2">{balanceData.usdt.formatted}</p>
+                  <p className="text-xl font-semibold text-green-600 mt-2">{balanceData.usdt?.formatted || '$0.00'}</p>
                   <p className="text-gray-500 text-sm">Real-time blockchain balance</p>
                   <p className="text-gray-400 text-xs mt-1">
-                    1 {balanceData.usdt.tokenSymbol} = ${balanceData.usdt.price.toFixed(2)} USDT
+                    1 {balanceData.usdt?.tokenSymbol || 'BNB'} = ${balanceData.usdt?.price?.toFixed(2) || '0.00'} USDT
                   </p>
                 </>
               )}
@@ -225,7 +231,7 @@ function DashboardContent() {
             </svg>
             <div>
               <p className="text-sm text-green-700">
-                <strong>Real-Time Features:</strong> Bu cüzdan gerçek blockchain verilerini kullanır ve Binance API'sinden 
+                <strong>Real-Time Features:</strong> Bu cüzdan gerçek blockchain verilerini kullanır ve Binance API&apos;sinden 
                 güncel fiyat bilgileri alarak USDT cinsinden değer gösterir. Tüm bakiyeler ve işlemler gerçek blockchain ağlarından çekilir.
               </p>
             </div>

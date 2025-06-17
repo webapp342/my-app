@@ -1,4 +1,4 @@
-import { fetchTokenPrice, calculateUSDTValue } from './binance-price'
+import { fetchTokenPrice } from './binance-price'
 
 // BSCScan API endpoints (uses same format as Etherscan)
 const BSCSCAN_API_URL = 'https://api.bscscan.com/api'
@@ -69,8 +69,10 @@ export async function fetchTokenBalances(address: string): Promise<TokenBalance[
     console.log(`[PORTFOLIO DEBUG] Found ${data.result.length} token transactions`)
 
     // Get unique token contracts
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const uniqueTokens = new Map<string, any>()
     
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     data.result.forEach((tx: any, index: number) => {
       if (index < 5) { // Log first 5 transactions for debug
         console.log(`[PORTFOLIO DEBUG] Transaction ${index}:`, {

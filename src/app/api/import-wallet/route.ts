@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabase } from '@/lib/supabase'
 import { walletFromPrivateKey, decodePrivateKey } from '@/lib/crypto'
-import { getWalletBalance } from '@/lib/blockchain'
+import { getWalletBalance, NETWORKS } from '@/lib/blockchain'
 import { calculateUSDTValue, getNativeCurrencySymbol } from '@/lib/binance-price'
 
 export async function POST(request: NextRequest) {
@@ -19,7 +19,7 @@ export async function POST(request: NextRequest) {
     try {
       // Try to reconstruct wallet from private key using Ethers.js v6
       wallet = walletFromPrivateKey(privateKey.trim())
-    } catch (error) {
+    } catch {
       return NextResponse.json(
         { error: 'Invalid private key format' },
         { status: 400 }
@@ -62,23 +62,21 @@ export async function POST(request: NextRequest) {
     let usdtData = { usdtValue: 0, formattedValue: '$0.00', price: 0 }
     
     try {
-      balanceData = await getWalletBalance(address, walletData.network as any)
+      balanceData = await getWalletBalance(address, walletData.network as keyof typeof NETWORKS)
       
       // Calculate USDT value
-      const tokenSymbol = getNativeCurrencySymbol(walletData.network as any)
+      const tokenSymbol = getNativeCurrencySymbol(walletData.network as keyof typeof NETWORKS)
       usdtData = await calculateUSDTValue(
-        balanceData.balance.formatted,
+        balanceData.balanceFormatted,
         tokenSymbol,
-        walletData.network as any
+        walletData.network as keyof typeof NETWORKS
       )
-    } catch (error) {
-      console.error('Error fetching balance:', error)
+    } catch (balanceError) {
+      console.error('Error fetching balance:', balanceError)
       balanceData = {
-        balance: { 
-          raw: '0',
-          formatted: '0.000000',
-          symbol: 'BNB'
-        },
+        balance: '0',
+        balanceFormatted: '0.000000',
+        symbol: 'BNB',
         network: 'BSC Mainnet'
       }
     }
@@ -87,8 +85,8 @@ export async function POST(request: NextRequest) {
       address,
       username: walletData.users?.username || 'Unknown',
       network: walletData.network,
-      balance: balanceData.balance.formatted,
-      symbol: balanceData.balance.symbol,
+      balance: balanceData.balanceFormatted,
+      symbol: balanceData.symbol,
       usdtValue: usdtData.formattedValue,
       tokenPrice: usdtData.price.toFixed(2),
       message: 'Wallet imported successfully'

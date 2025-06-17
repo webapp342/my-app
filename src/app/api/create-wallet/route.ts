@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabase } from '@/lib/supabase'
 import { createRandomWallet, encodePrivateKey } from '@/lib/crypto'
-import { getWalletBalance } from '@/lib/blockchain'
+import { getWalletBalance, NETWORKS } from '@/lib/blockchain'
 import { calculateUSDTValue, getNativeCurrencySymbol } from '@/lib/binance-price'
 
 export async function POST(request: NextRequest) {
@@ -39,23 +39,21 @@ export async function POST(request: NextRequest) {
     let usdtData = { usdtValue: 0, formattedValue: '$0.00', price: 0 }
     
     try {
-      balanceData = await getWalletBalance(address, network as any)
+      balanceData = await getWalletBalance(address, network as keyof typeof NETWORKS)
       
       // Calculate USDT value
-      const tokenSymbol = getNativeCurrencySymbol(network as any)
+      const tokenSymbol = getNativeCurrencySymbol(network as keyof typeof NETWORKS)
       usdtData = await calculateUSDTValue(
-        balanceData.balance.formatted,
+        balanceData.balanceFormatted,
         tokenSymbol,
-        network as any
+        network as keyof typeof NETWORKS
       )
     } catch (error) {
       console.error('Error fetching balance:', error)
       balanceData = {
-        balance: { 
-          raw: '0',
-          formatted: '0.000000',
-          symbol: 'BNB'
-        },
+        balance: '0',
+        balanceFormatted: '0.000000',
+        symbol: 'BNB',
         network: 'BSC Mainnet'
       }
     }
@@ -114,8 +112,8 @@ export async function POST(request: NextRequest) {
       privateKey,
       username,
       network,
-      balance: balanceData?.balance?.formatted || '0.000000',
-      symbol: balanceData?.balance?.symbol || 'BNB',
+      balance: balanceData?.balanceFormatted || '0.000000',
+      symbol: balanceData?.symbol || 'BNB',
       usdtValue: usdtData.formattedValue,
       tokenPrice: usdtData.price.toFixed(2),
       message: 'Wallet created successfully'

@@ -8,7 +8,6 @@ import { isValidAddress } from '@/lib/transaction-service'
 function TransactionPageContent() {
   const searchParams = useSearchParams()
   const initialAddress = searchParams.get('address') || ''
-  const initialNetwork = searchParams.get('network') as 'ethereum' | 'bsc' || undefined
 
   const [address, setAddress] = useState(initialAddress)
   const [network, setNetwork] = useState<'ethereum' | 'bsc'>('ethereum')
