@@ -54,7 +54,6 @@ export default function CreateWallet() {
 
       // Redirect to welcome page with wallet details
       const params = new URLSearchParams({
-        userId: data.userId,
         address: data.address,
         privateKey: data.privateKey,
         username: data.username,

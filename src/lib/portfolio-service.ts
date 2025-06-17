@@ -193,13 +193,13 @@ export async function getPortfolioData(address: string): Promise<PortfolioData> 
     
     const balanceData = await getWalletBalance(address, 'BSC_MAINNET')
     const tokenSymbol = getNativeCurrencySymbol('BSC_MAINNET')
-    const usdtData = await calculateUSDTValue(balanceData.formatted, tokenSymbol, 'BSC_MAINNET')
+    const usdtData = await calculateUSDTValue(balanceData.balanceFormatted, tokenSymbol, 'BSC_MAINNET')
     
     console.log('[PORTFOLIO DEBUG] BNB balance data:', { balanceData, usdtData })
     
     const nativeBalance = {
       symbol: 'BNB',
-      balance: parseFloat(balanceData.formatted),
+      balance: parseFloat(balanceData.balanceFormatted),
       value: usdtData.usdtValue
     }
 

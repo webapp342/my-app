@@ -20,6 +20,10 @@ const TOKEN_SYMBOL_MAP: Record<string, string> = {
   'bsc_UNI': 'UNIUSDT',
   'bsc_AAVE': 'AAVEUSDT',
   
+  // BSC specific tokens
+  'BSC-USD': 'USDTUSDT', // Binance-Peg BSC-USD is actually USDT
+  'Binance-Peg BSC-USD': 'USDTUSDT',
+  
   // Common tokens
   'BTC': 'BTCUSDT',
   'ETH': 'ETHUSDT',
@@ -39,7 +43,8 @@ const CACHE_DURATION = 5 * 60 * 1000 // 5 minutes
 
 interface BinancePriceResponse {
   symbol: string
-  price: string
+  price?: string
+  lastPrice?: string
   priceChange: string
   priceChangePercent: string
 }
@@ -94,8 +99,8 @@ export async function fetchTokenPrice(tokenSymbol: string, network: keyof typeof
   }
 
   try {
-    // Special case for USDT/USDC - always return 1
-    if (['USDT', 'USDC', 'BUSD', 'DAI'].includes(tokenSymbol.toUpperCase())) {
+    // Special case for stablecoins - always return 1
+    if (['USDT', 'USDC', 'BUSD', 'DAI', 'BSC-USD'].includes(tokenSymbol.toUpperCase())) {
       const price = 1.0
       priceCache.set(binanceSymbol, { price, timestamp: Date.now() })
       console.log(`[PRICE DEBUG] Stablecoin price for ${tokenSymbol}: $${price}`)
@@ -116,7 +121,8 @@ export async function fetchTokenPrice(tokenSymbol: string, network: keyof typeof
     const data: BinancePriceResponse = await response.json()
     console.log(`[PRICE DEBUG] API Response data:`, data)
     
-    const price = parseFloat(data.price)
+    // Binance 24hr ticker API uses 'lastPrice' field, not 'price'
+    const price = parseFloat(data.lastPrice || data.price || '0')
     console.log(`[PRICE DEBUG] Parsed price for ${binanceSymbol}: $${price}`)
 
     // Cache the result

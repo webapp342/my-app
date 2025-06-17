@@ -8,7 +8,6 @@ function WelcomeContent() {
   const searchParams = useSearchParams()
   const [copied, setCopied] = useState('')
   
-  const userId = searchParams.get('userId')
   const address = searchParams.get('address')
   const privateKey = searchParams.get('privateKey')
   const username = searchParams.get('username')
@@ -126,7 +125,7 @@ function WelcomeContent() {
 
           <div className="mt-8 flex flex-col sm:flex-row gap-4">
             <Link
-              href={`/dashboard?userId=${userId}&address=${address}&username=${username}&network=${network}`}
+              href={`/dashboard?address=${address}&username=${username}&network=${network}`}
               className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-6 rounded-lg text-center transition duration-200"
             >
               Go to Dashboard

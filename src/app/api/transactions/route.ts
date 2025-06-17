@@ -1,5 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { supabase } from '@/lib/supabase'
+import { 
+  fetchTransactionHistory, 
+  detectNetwork, 
+  isValidAddress 
+} from '@/lib/transaction-service'
+import { TransactionResponse } from '@/types/transaction'
 
 /**
  * GET /api/transactions
@@ -7,11 +12,10 @@ import { supabase } from '@/lib/supabase'
  * Fetches and categorizes blockchain transactions for a given address
  * 
  * Query Parameters:
- * - userId (optional): User ID
- * - walletAddress (optional): Ethereum or BSC wallet address
+ * - address (required): Ethereum or BSC wallet address
+ * - network (optional): 'ethereum' or 'bsc' - auto-detected if not provided
  * - page (optional): Page number for pagination (default: 1)
  * - limit (optional): Number of transactions per page (default: 20, max: 100)
- * - type (optional): Transaction type ('deposit', 'withdraw', 'all')
  * 
  * Returns:
  * - Array of categorized transactions (deposit, withdraw, token_transfer)
@@ -21,171 +25,110 @@ import { supabase } from '@/lib/supabase'
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url)
-    const userId = searchParams.get('userId')
-    const walletAddress = searchParams.get('walletAddress')
-    const page = parseInt(searchParams.get('page') || '1')
-    const limit = parseInt(searchParams.get('limit') || '20')
-    const type = searchParams.get('type') // 'deposit' | 'withdraw' | 'all'
+    const address = searchParams.get('address')
+    const networkParam = searchParams.get('network')
+    const pageParam = searchParams.get('page')
+    const limitParam = searchParams.get('limit')
 
-    if (!userId && !walletAddress) {
+    // Validate required parameters
+    if (!address) {
       return NextResponse.json(
-        { error: 'Either userId or walletAddress is required' },
+        { error: 'Address parameter is required' },
         { status: 400 }
       )
     }
 
-    let query = supabase
-      .from('transactions')
-      .select('*')
-      .order('created_at', { ascending: false })
-
-    // Filter by user or wallet
-    if (userId) {
-      query = query.eq('user_id', userId)
-    } else if (walletAddress) {
-      query = query.eq('to_address', walletAddress)
-    }
-
-    // Filter by type if specified
-    if (type && type !== 'all') {
-      query = query.eq('type', type)
-    }
-
-    // Add pagination
-    const offset = (page - 1) * limit
-    query = query.range(offset, offset + limit - 1)
-
-    const { data: transactions, error, count } = await query
-
-    if (error) {
-      console.error('Error fetching transactions:', error)
+    // Validate address format
+    if (!isValidAddress(address)) {
       return NextResponse.json(
-        { error: 'Failed to fetch transactions' },
+        { error: 'Invalid address format' },
+        { status: 400 }
+      )
+    }
+
+    // Parse and validate pagination parameters
+    const page = Math.max(1, parseInt(pageParam || '1'))
+    const limit = Math.min(100, Math.max(1, parseInt(limitParam || '20')))
+
+    // Detect or validate network
+    const network = detectNetwork(address, networkParam || undefined)
+    
+    if (networkParam && !['ethereum', 'bsc'].includes(networkParam)) {
+      return NextResponse.json(
+        { error: 'Network must be either "ethereum" or "bsc"' },
+        { status: 400 }
+      )
+    }
+
+    // Check for required API keys
+    const etherscanKey = process.env.ETHERSCAN_API_KEY
+    const bscscanKey = process.env.BSCSCAN_API_KEY
+
+    if (network === 'ethereum' && !etherscanKey) {
+      return NextResponse.json(
+        { error: 'Etherscan API key not configured' },
         { status: 500 }
       )
     }
 
-    // Format transactions for frontend
-    const formattedTransactions = transactions?.map(tx => ({
-      id: tx.id,
-      hash: tx.tx_hash,
-      from: tx.from_address,
-      to: tx.to_address,
-      amount: tx.amount.toString(),
-      tokenSymbol: tx.token_symbol,
-      tokenAddress: tx.token_address,
-      decimals: tx.token_decimals,
-      network: tx.network,
-      type: tx.type,
-      status: tx.status,
-      blockNumber: tx.block_number,
-      gasUsed: tx.gas_used?.toString(),
-      gasPrice: tx.gas_price?.toString(),
-      timestamp: tx.created_at,
-      explorerUrl: getExplorerUrl(tx.tx_hash, tx.network)
-    })) || []
-
-    // Get total count for pagination
-    const { count: totalCount } = await supabase
-      .from('transactions')
-      .select('*', { count: 'exact', head: true })
-      .eq(userId ? 'user_id' : 'to_address', userId || walletAddress)
-
-    const hasMore = offset + limit < (totalCount || 0)
-
-    return NextResponse.json({
-      transactions: formattedTransactions,
-      pagination: {
-        page,
-        limit,
-        total: totalCount || 0,
-        hasMore
-      },
-      network: 'BSC_MAINNET'
-    })
-
-  } catch (error) {
-    console.error('Error in transactions API:', error)
-    return NextResponse.json(
-      { 
-        error: 'Internal server error', 
-        details: error instanceof Error ? error.message : 'Unknown error'
-      },
-      { status: 500 }
-    )
-  }
-}
-
-// Get transaction summary for a user
-export async function POST(request: NextRequest) {
-  try {
-    const { userId } = await request.json()
-
-    if (!userId) {
+    if (network === 'bsc' && !bscscanKey) {
       return NextResponse.json(
-        { error: 'User ID is required' },
-        { status: 400 }
+        { error: 'BSCScan API key not configured' },
+        { status: 500 }
       )
     }
 
-    // Get transaction counts by type
-    const { data: summary } = await supabase
-      .from('transactions')
-      .select('type, token_symbol, amount')
-      .eq('user_id', userId)
+    // Fetch transaction history
+    const result = await fetchTransactionHistory(address, network, page, limit)
 
-    if (!summary) {
-      return NextResponse.json({
-        totalDeposits: 0,
-        totalWithdrawals: 0,
-        transactionCount: 0,
-        tokenBreakdown: {}
-      })
+    // Prepare response
+    const response: TransactionResponse = {
+      transactions: result.transactions,
+      total: result.total,
+      page,
+      limit,
+      hasMore: result.hasMore,
+      network
     }
 
-    const deposits = summary.filter(tx => tx.type === 'deposit')
-    const withdrawals = summary.filter(tx => tx.type === 'withdraw')
-
-    // Calculate token breakdown
-    const tokenBreakdown: Record<string, { deposits: number; amount: number }> = {}
-    
-    deposits.forEach(tx => {
-      if (!tokenBreakdown[tx.token_symbol]) {
-        tokenBreakdown[tx.token_symbol] = { deposits: 0, amount: 0 }
-      }
-      tokenBreakdown[tx.token_symbol].deposits++
-      tokenBreakdown[tx.token_symbol].amount += parseFloat(tx.amount.toString())
-    })
-
-    return NextResponse.json({
-      totalDeposits: deposits.length,
-      totalWithdrawals: withdrawals.length,
-      transactionCount: summary.length,
-      tokenBreakdown
-    })
+    return NextResponse.json(response)
 
   } catch (error) {
-    console.error('Error in transaction summary API:', error)
+    console.error('Error in transactions API:', error)
+    
+    // Handle specific error types
+    if (error instanceof Error) {
+      if (error.message.includes('API key')) {
+        return NextResponse.json(
+          { error: 'API configuration error' },
+          { status: 500 }
+        )
+      }
+      
+      if (error.message.includes('rate limit') || error.message.includes('too many requests')) {
+        return NextResponse.json(
+          { error: 'API rate limit exceeded. Please try again later.' },
+          { status: 429 }
+        )
+      }
+
+      if (error.message.includes('No transactions found')) {
+        return NextResponse.json({
+          transactions: [],
+          total: 0,
+          page: 1,
+          limit,
+          hasMore: false,
+          network: network || 'ethereum'
+        })
+      }
+    }
+
     return NextResponse.json(
-      { 
-        error: 'Internal server error', 
-        details: error instanceof Error ? error.message : 'Unknown error'
-      },
+      { error: 'Failed to fetch transactions' },
       { status: 500 }
     )
   }
-}
-
-// Helper function to generate explorer URLs
-function getExplorerUrl(txHash: string, network: string): string {
-  const explorers = {
-    'BSC_MAINNET': 'https://bscscan.com/tx/',
-    'BSC_TESTNET': 'https://testnet.bscscan.com/tx/',
-    'ETHEREUM': 'https://etherscan.io/tx/'
-  }
-  
-  const baseUrl = explorers[network as keyof typeof explorers] || explorers.BSC_MAINNET
-  return `${baseUrl}${txHash}`
 }
 
 /**

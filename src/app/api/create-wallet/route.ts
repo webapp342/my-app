@@ -110,7 +110,6 @@ export async function POST(request: NextRequest) {
     console.log('USDT data:', usdtData)
     
     return NextResponse.json({
-      userId: user.id,
       address,
       privateKey,
       username,
