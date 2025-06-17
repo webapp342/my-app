@@ -4,12 +4,12 @@ import { supabase } from '@/lib/supabase'
 // GET - Get specific virtual card details
 export async function GET(
   request: NextRequest,
-  { params }: { params: { cardId: string } }
+  { params }: { params: Promise<{ cardId: string }> }
 ) {
   try {
     const { searchParams } = new URL(request.url)
     const userId = searchParams.get('userId')
-    const { cardId } = params
+    const { cardId } = await params
 
     if (!userId || !cardId) {
       return NextResponse.json(
@@ -56,11 +56,11 @@ export async function GET(
 // PUT - Update virtual card (block/unblock, update limits)
 export async function PUT(
   request: NextRequest,
-  { params }: { params: { cardId: string } }
+  { params }: { params: Promise<{ cardId: string }> }
 ) {
   try {
     const { userId, status, dailyLimit, monthlyLimit } = await request.json()
-    const { cardId } = params
+    const { cardId } = await params
 
     if (!userId || !cardId) {
       return NextResponse.json(
@@ -127,12 +127,12 @@ export async function PUT(
 // DELETE - Cancel virtual card
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { cardId: string } }
+  { params }: { params: Promise<{ cardId: string }> }
 ) {
   try {
     const { searchParams } = new URL(request.url)
     const userId = searchParams.get('userId')
-    const { cardId } = params
+    const { cardId } = await params
 
     if (!userId || !cardId) {
       return NextResponse.json(
