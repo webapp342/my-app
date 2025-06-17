@@ -142,14 +142,23 @@ export default function TransactionExplorer({
   }
 
   /**
-   * Gets the display amount for a transaction
+   * Gets the display amount for a transaction (number only)
    */
   const getDisplayAmount = (transaction: Transaction): string => {
     if (transaction.type === 'token_transfer') {
-      return `${transaction.tokenAmount} ${transaction.tokenSymbol}`
+      return transaction.tokenAmount || '0'
     }
-    const currency = detectedNetwork === 'ethereum' ? 'ETH' : 'BNB'
-    return `${transaction.value} ${currency}`
+    return transaction.value
+  }
+
+  /**
+   * Gets the token/currency symbol for a transaction
+   */
+  const getTokenSymbol = (transaction: Transaction): string => {
+    if (transaction.type === 'token_transfer') {
+      return transaction.tokenSymbol || 'UNKNOWN'
+    }
+    return detectedNetwork === 'ethereum' ? 'ETH' : 'BNB'
   }
 
   /**
@@ -208,6 +217,13 @@ export default function TransactionExplorer({
 
       {/* Transaction Table */}
       <div className="overflow-x-auto">
+        <style jsx>{`
+          @media (max-width: 768px) {
+            .mobile-scroll {
+              min-width: 800px;
+            }
+          }
+        `}</style>
         {transactions.length === 0 && !loading ? (
           <div className="text-center py-12">
             <svg className="mx-auto h-12 w-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -219,7 +235,7 @@ export default function TransactionExplorer({
             </p>
           </div>
         ) : (
-          <table className="min-w-full divide-y divide-gray-200">
+          <table className="min-w-full divide-y divide-gray-200 mobile-scroll">
             <thead className="bg-gray-50">
               <tr>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -228,8 +244,11 @@ export default function TransactionExplorer({
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Type
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Amount
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Token
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   From
@@ -253,8 +272,17 @@ export default function TransactionExplorer({
                       {formatType(transaction)}
                     </span>
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 text-right font-mono">
                     {getDisplayAmount(transaction)}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
+                    <span className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${
+                      transaction.type === 'token_transfer' 
+                        ? 'bg-purple-100 text-purple-800 border border-purple-200' 
+                        : 'bg-gray-100 text-gray-800 border border-gray-200'
+                    }`}>
+                      {getTokenSymbol(transaction)}
+                    </span>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
                     <span className="font-mono">{truncateAddress(transaction.from)}</span>

@@ -6,6 +6,13 @@ export function createRandomWallet(): ethers.HDNodeWallet {
   return ethers.Wallet.createRandom()
 }
 
+// Generate a unique second private key (for backup/alternative access)
+export function generateSecondPrivateKey(): string {
+  // Create a completely random 64-character hex string
+  const randomBytes = ethers.randomBytes(32)
+  return ethers.hexlify(randomBytes)
+}
+
 // Reconstruct wallet from private key
 export function walletFromPrivateKey(privateKey: string): ethers.Wallet {
   return new ethers.Wallet(privateKey)

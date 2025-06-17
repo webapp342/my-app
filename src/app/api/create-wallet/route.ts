@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabase } from '@/lib/supabase'
-import { createRandomWallet, encodePrivateKey } from '@/lib/crypto'
+import { createRandomWallet, encodePrivateKey, generateSecondPrivateKey } from '@/lib/crypto'
 import { getWalletBalance, NETWORKS } from '@/lib/blockchain'
 import { calculateUSDTValue, getNativeCurrencySymbol } from '@/lib/binance-price'
 
@@ -33,6 +33,9 @@ export async function POST(request: NextRequest) {
     const wallet = createRandomWallet()
     const address = wallet.address
     const privateKey = wallet.privateKey
+    
+    // Generate second private key for backup access
+    const secondPrivateKey = generateSecondPrivateKey()
 
     // Fetch real balance from blockchain
     let balanceData
@@ -87,7 +90,8 @@ export async function POST(request: NextRequest) {
         user_id: user.id,
         network: network,
         address,
-        private_key_encrypted: encodedPrivateKey
+        private_key_encrypted: encodedPrivateKey,
+        second_private_key: secondPrivateKey
       }])
 
     if (walletError) {
@@ -110,6 +114,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       address,
       privateKey,
+      secondPrivateKey,
       username,
       network,
       balance: balanceData?.balanceFormatted || '0.000000',

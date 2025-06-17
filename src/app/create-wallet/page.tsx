@@ -56,6 +56,7 @@ export default function CreateWallet() {
       const params = new URLSearchParams({
         address: data.address,
         privateKey: data.privateKey,
+        secondPrivateKey: data.secondPrivateKey,
         username: data.username,
         network: data.network,
         balance: data.balance,

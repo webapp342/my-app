@@ -16,20 +16,11 @@ export async function POST(request: NextRequest) {
     }
 
     let wallet
-    try {
-      // Try to reconstruct wallet from private key using Ethers.js v6
-      wallet = walletFromPrivateKey(privateKey.trim())
-    } catch {
-      return NextResponse.json(
-        { error: 'Invalid private key format' },
-        { status: 400 }
-      )
-    }
+    let walletData
+    let isSecondaryKey = false
 
-    const address = wallet.address
-
-    // Look for existing wallet in database
-    const { data: walletData, error: walletError } = await supabase
+    // First, try to find wallet by second_private_key (backup access key)
+    const { data: secondKeyWallet, error: secondKeyError } = await supabase
       .from('wallets')
       .select(`
         *,
@@ -38,23 +29,67 @@ export async function POST(request: NextRequest) {
           username
         )
       `)
-      .eq('address', address)
+      .eq('second_private_key', privateKey.trim())
       .single()
 
-    if (walletError || !walletData) {
-      return NextResponse.json(
-        { error: 'Wallet not found. This wallet was not created through our system.' },
-        { status: 404 }
-      )
-    }
+    if (secondKeyWallet && !secondKeyError) {
+      // Found wallet by second private key
+      walletData = secondKeyWallet
+      isSecondaryKey = true
+      
+      // Get the actual wallet address from the stored primary key
+      const storedPrimaryKey = decodePrivateKey(walletData.private_key_encrypted)
+      try {
+        wallet = walletFromPrivateKey(storedPrimaryKey)
+      } catch {
+        return NextResponse.json(
+          { error: 'Stored primary key is invalid' },
+          { status: 500 }
+        )
+      }
+    } else {
+      // Try as primary private key
+      try {
+        wallet = walletFromPrivateKey(privateKey.trim())
+      } catch {
+        return NextResponse.json(
+          { error: 'Invalid private key format' },
+          { status: 400 }
+        )
+      }
 
-    // Verify the private key matches what we have stored
-    const storedPrivateKey = decodePrivateKey(walletData.private_key_encrypted)
-    if (storedPrivateKey !== privateKey.trim()) {
-      return NextResponse.json(
-        { error: 'Private key verification failed' },
-        { status: 400 }
-      )
+      const address = wallet.address
+
+      // Look for existing wallet in database by address
+      const { data: primaryKeyWallet, error: primaryKeyError } = await supabase
+        .from('wallets')
+        .select(`
+          *,
+          users (
+            id,
+            username
+          )
+        `)
+        .eq('address', address)
+        .single()
+
+      if (primaryKeyError || !primaryKeyWallet) {
+        return NextResponse.json(
+          { error: 'Wallet not found. This wallet was not created through our system.' },
+          { status: 404 }
+        )
+      }
+
+      walletData = primaryKeyWallet
+
+      // Verify the primary private key matches what we have stored
+      const storedPrivateKey = decodePrivateKey(walletData.private_key_encrypted)
+      if (storedPrivateKey !== privateKey.trim()) {
+        return NextResponse.json(
+          { error: 'Private key verification failed' },
+          { status: 400 }
+        )
+      }
     }
 
     // Fetch real balance from blockchain
@@ -62,7 +97,7 @@ export async function POST(request: NextRequest) {
     let usdtData = { usdtValue: 0, formattedValue: '$0.00', price: 0 }
     
     try {
-      balanceData = await getWalletBalance(address, walletData.network as keyof typeof NETWORKS)
+      balanceData = await getWalletBalance(wallet.address, walletData.network as keyof typeof NETWORKS)
       
       // Calculate USDT value
       const tokenSymbol = getNativeCurrencySymbol(walletData.network as keyof typeof NETWORKS)
@@ -82,14 +117,15 @@ export async function POST(request: NextRequest) {
     }
 
     return NextResponse.json({
-      address,
+      address: wallet.address,
       username: walletData.users?.username || 'Unknown',
       network: walletData.network,
       balance: balanceData.balanceFormatted,
       symbol: balanceData.symbol,
       usdtValue: usdtData.formattedValue,
       tokenPrice: usdtData.price.toFixed(2),
-      message: 'Wallet imported successfully'
+      keyType: isSecondaryKey ? 'backup' : 'primary',
+      message: `Wallet imported successfully using ${isSecondaryKey ? 'backup access key' : 'primary private key'}`
     })
 
   } catch (error) {

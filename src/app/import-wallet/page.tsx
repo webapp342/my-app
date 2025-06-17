@@ -63,7 +63,7 @@ export default function ImportWallet() {
               Import Existing Wallet
             </h1>
             <p className="text-gray-600">
-              Enter your private key to access your BSC wallet
+              Enter your primary private key or backup access key to access your BSC wallet
             </p>
           </div>
 
@@ -76,17 +76,20 @@ export default function ImportWallet() {
 
             <div>
               <label htmlFor="privateKey" className="block text-sm font-medium text-gray-700 mb-2">
-                Private Key
+                Private Key or Backup Access Key
               </label>
               <textarea
                 id="privateKey"
                 required
                 rows={4}
                 className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
-                placeholder="Enter your private key (64 characters, starting with 0x)"
+                placeholder="Enter your primary private key (starts with 0x) or backup access key"
                 value={privateKey}
                 onChange={(e) => setPrivateKey(e.target.value)}
               />
+              <p className="mt-1 text-xs text-gray-500">
+                Accepts both primary private keys and backup access keys
+              </p>
             </div>
 
             <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
