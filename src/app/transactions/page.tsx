@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, Suspense } from 'react'
+import { useState, Suspense, useEffect } from 'react'
 import { useSearchParams } from 'next/navigation'
 import TransactionExplorer from '@/components/TransactionExplorer'
 import { isValidAddress } from '@/lib/transaction-service'
@@ -10,11 +10,59 @@ function TransactionPageContent() {
   const initialAddress = searchParams.get('address') || ''
 
   const [address, setAddress] = useState(initialAddress)
-  const [network, setNetwork] = useState<'ethereum' | 'bsc'>('ethereum')
+  const [network, setNetwork] = useState<'ethereum' | 'bsc'>('bsc') // Default to BSC since we mainly use BSC_MAINNET
   const [searchAddress, setSearchAddress] = useState(initialAddress)
   const [error, setError] = useState('')
+  const [networkLoading, setNetworkLoading] = useState(false)
+  const [detectedNetwork, setDetectedNetwork] = useState<string | null>(null)
 
-  const handleSearch = (e: React.FormEvent) => {
+  // Function to detect network from wallet address
+  const detectNetworkFromAddress = async (walletAddress: string) => {
+    if (!walletAddress.trim() || !isValidAddress(walletAddress.trim())) {
+      setDetectedNetwork(null)
+      return
+    }
+
+    setNetworkLoading(true)
+    try {
+      const response = await fetch(`/api/get-wallet-network?address=${encodeURIComponent(walletAddress.trim())}`)
+      const data = await response.json()
+      
+      if (response.ok && data.network) {
+        // Convert database network format to our format
+        const networkMap: { [key: string]: 'ethereum' | 'bsc' } = {
+          'BSC_MAINNET': 'bsc',
+          'BSC_TESTNET': 'bsc',
+          'ETHEREUM': 'ethereum',
+          'POLYGON': 'ethereum', // Default fallback
+          'ARBITRUM': 'ethereum'  // Default fallback
+        }
+        
+        const detectedNet = networkMap[data.network] || 'bsc'
+        setNetwork(detectedNet)
+        setDetectedNetwork(data.network)
+      } else {
+        // If not found in database, keep current selection
+        setDetectedNetwork(null)
+      }
+    } catch (error) {
+      console.error('Error detecting network:', error)
+      setDetectedNetwork(null)
+    } finally {
+      setNetworkLoading(false)
+    }
+  }
+
+  // Auto-detect network when address changes
+  useEffect(() => {
+    if (address.trim() && isValidAddress(address.trim())) {
+      detectNetworkFromAddress(address.trim())
+    } else {
+      setDetectedNetwork(null)
+    }
+  }, [address])
+
+  const handleSearch = async (e: React.FormEvent) => {
     e.preventDefault()
     setError('')
 
@@ -28,6 +76,9 @@ function TransactionPageContent() {
       return
     }
 
+    // Auto-detect network from database first
+    await detectNetworkFromAddress(address.trim())
+    
     setSearchAddress(address.trim())
 
     // Update URL without refresh
@@ -78,17 +129,32 @@ function TransactionPageContent() {
               
               <div className="md:col-span-2">
                 <label htmlFor="network" className="block text-sm font-medium text-gray-700 mb-2">
-                  Network
+                  Network {detectedNetwork && <span className="text-xs text-green-600">(Auto-detected)</span>}
                 </label>
-                <select
-                  id="network"
-                  value={network}
-                  onChange={(e) => setNetwork(e.target.value as 'ethereum' | 'bsc')}
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                >
-                  <option value="ethereum">Ethereum</option>
-                  <option value="bsc">BSC</option>
-                </select>
+                <div className="relative">
+                  <select
+                    id="network"
+                    value={network}
+                    onChange={(e) => setNetwork(e.target.value as 'ethereum' | 'bsc')}
+                    disabled={detectedNetwork !== null}
+                    className={`w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+                      detectedNetwork ? 'bg-gray-50 text-gray-600 cursor-not-allowed' : ''
+                    }`}
+                  >
+                    <option value="ethereum">Ethereum</option>
+                    <option value="bsc">BSC</option>
+                  </select>
+                  {networkLoading && (
+                    <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
+                    </div>
+                  )}
+                </div>
+                {detectedNetwork && (
+                  <p className="text-xs text-green-600 mt-1">
+                    Network auto-detected from wallet: {detectedNetwork}
+                  </p>
+                )}
               </div>
 
               <div className="md:col-span-2 flex items-end gap-2">
