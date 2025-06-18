@@ -190,12 +190,18 @@ function DashboardContent() {
               >
                 Presale
               </Link>
+              <Link
+                href={`/asset-priorities?address=${address}&username=${username}&userId=${userId}`}
+                className="bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-700 hover:to-blue-700 text-white font-medium py-2 px-4 rounded-lg transition duration-200"
+              >
+                Asset Priorities
+              </Link>
             </div>
           </div>
         </div>
 
         {/* Wallet Overview */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
           {/* Balance Card */}
           <div className="bg-white rounded-2xl shadow-xl p-6">
             <h2 className="text-lg font-semibold text-gray-900 mb-4">Total Portfolio Value</h2>
@@ -250,6 +256,49 @@ function DashboardContent() {
                 </div>
               </div>
             )}
+          </div>
+
+          {/* Quick Actions */}
+          <div className="bg-white rounded-2xl shadow-xl p-6">
+            <h2 className="text-lg font-semibold text-gray-900 mb-4">Quick Actions</h2>
+            <div className="space-y-3">
+              <Link
+                href={`/send-bnb?address=${address}&username=${username}`}
+                className="w-full bg-gradient-to-r from-yellow-500 to-orange-500 hover:from-yellow-600 hover:to-orange-600 text-white font-semibold py-3 px-4 rounded-xl flex items-center justify-center transition-all duration-200 transform hover:scale-105"
+              >
+                <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+                </svg>
+                Send BNB
+              </Link>
+              
+              <Link
+                href={`/transactions?address=${address}&username=${username}`}
+                className="w-full bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium py-3 px-4 rounded-xl flex items-center justify-center transition-colors"
+              >
+                <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                </svg>
+                View Transactions
+              </Link>
+
+              <Link
+                href={`/checkout?address=${address}&username=${username}&userId=${userId}`}
+                className="w-full bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-600 hover:to-emerald-600 text-white font-medium py-3 px-4 rounded-xl flex items-center justify-center transition-all duration-200 transform hover:scale-105"
+              >
+                <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 3h2l.4 2M7 13h10l4-8H5.4m0 0L7 13m0 0l-2.5 5M17 13v6a2 2 0 01-2 2H9a2 2 0 01-2-2v-6" />
+                </svg>
+                Buy with Card
+              </Link>
+            </div>
+            
+            <div className="mt-4 pt-4 border-t border-gray-200">
+              <h3 className="text-sm font-medium text-gray-700 mb-2">BNB Balance</h3>
+              <div className="text-lg font-semibold text-yellow-600">
+                {balanceTracking.balances.find((b: { token: string; balance: string }) => b.token === 'BNB')?.balance || '0.000000'} BNB
+              </div>
+            </div>
           </div>
         </div>
 

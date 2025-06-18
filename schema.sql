@@ -1,6 +1,17 @@
 -- WARNING: This schema is for context only and is not meant to be run.
 -- Table order and constraints may not be valid for execution.
 
+CREATE TABLE public.user_asset_priorities (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  user_id uuid NOT NULL,
+  token_symbol character varying NOT NULL,
+  priority_order integer NOT NULL CHECK (priority_order > 0),
+  is_enabled boolean NOT NULL DEFAULT true,
+  created_at timestamp with time zone NOT NULL DEFAULT timezone('utc'::text, now()),
+  updated_at timestamp with time zone DEFAULT timezone('utc'::text, now()),
+  CONSTRAINT user_asset_priorities_pkey PRIMARY KEY (id),
+  CONSTRAINT user_asset_priorities_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id)
+);
 CREATE TABLE public.user_balances (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
   user_id uuid NOT NULL,
@@ -33,6 +44,7 @@ CREATE TABLE public.users (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
   username character varying NOT NULL UNIQUE,
   created_at timestamp with time zone NOT NULL DEFAULT timezone('utc'::text, now()),
+  transaction_password character varying,
   CONSTRAINT users_pkey PRIMARY KEY (id)
 );
 CREATE TABLE public.virtual_card_transactions (
@@ -49,8 +61,8 @@ CREATE TABLE public.virtual_card_transactions (
   transaction_date timestamp with time zone NOT NULL DEFAULT timezone('utc'::text, now()),
   created_at timestamp with time zone NOT NULL DEFAULT timezone('utc'::text, now()),
   CONSTRAINT virtual_card_transactions_pkey PRIMARY KEY (id),
-  CONSTRAINT virtual_card_transactions_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id),
-  CONSTRAINT virtual_card_transactions_card_id_fkey FOREIGN KEY (card_id) REFERENCES public.virtual_cards(id)
+  CONSTRAINT virtual_card_transactions_card_id_fkey FOREIGN KEY (card_id) REFERENCES public.virtual_cards(id),
+  CONSTRAINT virtual_card_transactions_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id)
 );
 CREATE TABLE public.virtual_cards (
   id uuid NOT NULL DEFAULT gen_random_uuid(),

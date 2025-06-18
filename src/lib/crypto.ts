@@ -1,5 +1,10 @@
 import { ethers } from 'ethers'
 import bcrypt from 'bcryptjs'
+import crypto from 'crypto'
+
+// AES encryption key - in production this should be from environment variables
+const ENCRYPTION_KEY = process.env.ENCRYPTION_KEY || 'default-32-char-key-for-encryption!'
+const ALGORITHM = 'aes-256-cbc'
 
 // Generate a new random wallet using Ethers.js v6
 export function createRandomWallet(): ethers.HDNodeWallet {
@@ -23,6 +28,22 @@ export async function encryptPrivateKey(privateKey: string, password: string): P
   const salt = await bcrypt.genSalt(10)
   const combined = `${privateKey}:${password}`
   return bcrypt.hash(combined, salt)
+}
+
+// AES Encryption for private keys
+export function encrypt(text: string): string {
+  const cipher = crypto.createCipher(ALGORITHM, ENCRYPTION_KEY)
+  let encrypted = cipher.update(text, 'utf8', 'hex')
+  encrypted += cipher.final('hex')
+  return encrypted
+}
+
+// AES Decryption for private keys
+export function decrypt(encryptedData: string): string {
+  const decipher = crypto.createDecipher(ALGORITHM, ENCRYPTION_KEY)
+  let decrypted = decipher.update(encryptedData, 'hex', 'utf8')
+  decrypted += decipher.final('utf8')
+  return decrypted
 }
 
 // For demo purposes, we'll store private keys with basic encoding

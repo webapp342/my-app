@@ -30,8 +30,13 @@ export function detectNetwork(address: string, networkParam?: string): 'ethereum
     return networkParam as 'ethereum' | 'bsc'
   }
   
-  // Default to Ethereum for now (could add more sophisticated detection)
-  return 'ethereum'
+  // BSC_MAINNET maps to bsc
+  if (networkParam === 'BSC_MAINNET' || networkParam === 'BSC') {
+    return 'bsc'
+  }
+  
+  // Default to BSC since this is a BSC-focused wallet app
+  return 'bsc'
 }
 
 /**
@@ -103,6 +108,12 @@ async function fetchTransactionsDirectly(
   limit: number
 ): Promise<RawTransaction[]> {
   const config = NETWORKS[network]
+  
+  if (!config.apiKey) {
+    console.warn(`[TRANSACTION SERVICE] Missing API key for ${network}. Please add ${network.toUpperCase()}SCAN_API_KEY to your .env.local file`)
+    throw new Error(`Missing ${network.toUpperCase()}SCAN_API_KEY. Please get a free API key from ${network === 'ethereum' ? 'etherscan.io' : 'bscscan.com'}`)
+  }
+  
   const baseUrl = network === 'ethereum' 
     ? 'https://api.etherscan.io/api'
     : 'https://api.bscscan.com/api'
@@ -117,6 +128,7 @@ async function fetchTransactionsDirectly(
   }
 
   if (data.status === '0') {
+    console.error(`[BSCScan API Error] ${data.message || 'Unknown error'}`)
     throw new Error(data.message || 'Failed to fetch transactions')
   }
 
@@ -143,6 +155,12 @@ async function fetchTokenTransfers(
   limit: number
 ): Promise<TokenTransfer[]> {
   const config = NETWORKS[network]
+  
+  if (!config.apiKey) {
+    console.warn(`[TRANSACTION SERVICE] Missing API key for ${network} token transfers`)
+    return [] // Return empty array instead of throwing for token transfers
+  }
+  
   const baseUrl = network === 'ethereum' 
     ? 'https://api.etherscan.io/api'
     : 'https://api.bscscan.com/api'

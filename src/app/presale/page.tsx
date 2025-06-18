@@ -17,9 +17,8 @@ function PresaleContent() {
   const [userBalances, setUserBalances] = useState<UserBalance[]>([])
   const [balancesLoading, setBalancesLoading] = useState(false)
   
-  // Form state
+  // Form state - removed selectedAsset
   const [tokenQuantity, setTokenQuantity] = useState<number>(0)
-  const [selectedAsset, setSelectedAsset] = useState<string>('')
   const [bnbPrice, setBnbPrice] = useState<number>(0)
   const [priceLoading, setPriceLoading] = useState(false)
   
@@ -51,11 +50,6 @@ function PresaleContent() {
             balance.token_symbol === 'BNB' || balance.token_symbol === 'BSC-USD'
           )
           setUserBalances(filteredBalances)
-          
-          // Auto-select first available asset
-          if (filteredBalances.length > 0) {
-            setSelectedAsset(filteredBalances[0].token_symbol)
-          }
         } else {
           console.warn('[PRESALE] Could not fetch user balances:', data.error)
         }
@@ -90,44 +84,48 @@ function PresaleContent() {
     fetchBnbPrice()
   }, [])
 
-  // Calculate required amount
-  const calculateRequiredAmount = () => {
+  // Calculate total USD cost
+  const calculateTotalUsdCost = () => {
     if (!tokenQuantity || tokenQuantity <= 0) return 0
+    return tokenQuantity * BBLIP_PRICE_USD
+  }
+
+  // Calculate total available balance in USD
+  const calculateTotalAvailableUsd = () => {
+    let totalUsd = 0
     
-    const totalUsdCost = tokenQuantity * BBLIP_PRICE_USD
+    userBalances.forEach(balance => {
+      const balanceAmount = parseFloat(balance.balance)
+      
+      if (balance.token_symbol === 'BNB' && bnbPrice > 0) {
+        totalUsd += balanceAmount * bnbPrice
+      } else if (balance.token_symbol === 'BSC-USD') {
+        totalUsd += balanceAmount // BSC-USD is pegged to $1
+      }
+    })
     
-    if (selectedAsset === 'BNB') {
-      return bnbPrice > 0 ? totalUsdCost / bnbPrice : 0
-    } else if (selectedAsset === 'BSC-USD') {
-      return totalUsdCost // BSC-USD is pegged to $1
-    }
-    
-    return 0
+    return totalUsd
   }
 
   // Check if user has sufficient balance
   const hasSufficientBalance = () => {
-    const requiredAmount = calculateRequiredAmount()
-    const selectedBalance = userBalances.find(b => b.token_symbol === selectedAsset)
+    const requiredUsd = calculateTotalUsdCost()
+    const availableUsd = calculateTotalAvailableUsd()
     
-    if (!selectedBalance || requiredAmount <= 0) return false
-    
-    return parseFloat(selectedBalance.balance) >= requiredAmount
+    return requiredUsd > 0 && availableUsd >= requiredUsd
   }
 
   // Handle purchase - redirect to checkout
   const handlePurchase = () => {
     if (!hasSufficientBalance()) return
     
-    // Redirect to checkout with purchase details
+    // Redirect to checkout with purchase details (no asset selection needed)
     const checkoutParams = new URLSearchParams({
       userId: userId || '',
       address: address || '',
       username: username || '',
       tokenQuantity: tokenQuantity.toString(),
-      selectedAsset,
-      requiredAmount: calculateRequiredAmount().toString(),
-      totalUsdCost: (tokenQuantity * BBLIP_PRICE_USD).toString(),
+      totalUsdCost: calculateTotalUsdCost().toString(),
       bnbPrice: bnbPrice.toString()
     })
     
@@ -161,8 +159,8 @@ function PresaleContent() {
     )
   }
 
-  const requiredAmount = calculateRequiredAmount()
-  const totalUsdCost = tokenQuantity * BBLIP_PRICE_USD
+  const totalUsdCost = calculateTotalUsdCost()
+  const totalAvailableUsd = calculateTotalAvailableUsd()
   const sufficientBalance = hasSufficientBalance()
 
   return (
@@ -198,114 +196,99 @@ function PresaleContent() {
                 <input
                   type="number"
                   min="1"
-                  step="1"
                   value={tokenQuantity || ''}
                   onChange={(e) => setTokenQuantity(parseInt(e.target.value) || 0)}
-                  placeholder="Enter number of BBLIP tokens"
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                  placeholder="Enter quantity (e.g., 100)"
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent text-lg"
                 />
-                <div className="absolute inset-y-0 right-0 flex items-center pr-3">
+                <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none">
                   <span className="text-gray-500 font-medium">BBLIP</span>
                 </div>
               </div>
             </div>
 
-            {/* Asset Selection */}
+            {/* Available Balances */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                Payment Asset
+                Available Balances
               </label>
               {balancesLoading ? (
-                <div className="animate-pulse h-12 bg-gray-200 rounded-lg"></div>
+                <div className="bg-gray-50 rounded-lg p-4 animate-pulse">
+                  <div className="h-4 bg-gray-200 rounded mb-2"></div>
+                  <div className="h-4 bg-gray-200 rounded w-3/4"></div>
+                </div>
+              ) : userBalances.length > 0 ? (
+                <div className="space-y-2">
+                  {userBalances.map((balance) => {
+                    const balanceAmount = parseFloat(balance.balance)
+                    let usdValue = 0
+                    
+                    if (balance.token_symbol === 'BNB' && bnbPrice > 0) {
+                      usdValue = balanceAmount * bnbPrice
+                    } else if (balance.token_symbol === 'BSC-USD') {
+                      usdValue = balanceAmount
+                    }
+                    
+                    return (
+                      <div key={balance.id} className="bg-gray-50 rounded-lg p-3 flex justify-between items-center">
+                        <div>
+                          <span className="font-medium text-gray-900">{balance.token_symbol}</span>
+                          <span className="text-sm text-gray-500 ml-2">({balance.network})</span>
+                        </div>
+                        <div className="text-right">
+                          <div className="font-semibold text-gray-900">
+                            {balanceAmount.toFixed(6)}
+                          </div>
+                          <div className="text-sm text-gray-500">
+                            ≈ ${usdValue.toFixed(2)}
+                          </div>
+                        </div>
+                      </div>
+                    )
+                  })}
+                  <div className="bg-purple-50 rounded-lg p-3 border border-purple-200">
+                    <div className="flex justify-between items-center">
+                      <span className="font-medium text-purple-900">Total Available</span>
+                      <span className="font-bold text-purple-900">
+                        ${totalAvailableUsd.toFixed(2)}
+                      </span>
+                    </div>
+                  </div>
+                </div>
               ) : (
-                <select
-                  value={selectedAsset}
-                  onChange={(e) => setSelectedAsset(e.target.value)}
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                  disabled={userBalances.length === 0}
-                >
-                  <option value="">Select payment asset</option>
-                  {userBalances.map((balance) => (
-                    <option key={balance.id} value={balance.token_symbol}>
-                      {balance.token_symbol} (Balance: {parseFloat(balance.balance).toFixed(6)})
-                    </option>
-                  ))}
-                </select>
-              )}
-              
-              {userBalances.length === 0 && !balancesLoading && (
-                <p className="text-sm text-red-600 mt-2">
-                  No BNB or BSC-USD balance found. Please add funds to your wallet.
-                </p>
+                <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+                  <p className="text-red-600">No supported assets found. Please ensure you have BNB or BSC-USD in your wallet.</p>
+                </div>
               )}
             </div>
 
-            {/* Price Calculation */}
-            {tokenQuantity > 0 && selectedAsset && (
-              <div className="bg-gray-50 rounded-lg p-6 space-y-4">
-                <h3 className="text-lg font-semibold text-gray-900">Purchase Summary</h3>
-                
-                <div className="grid grid-cols-2 gap-4 text-sm">
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">Token Quantity:</span>
-                    <span className="font-medium">{tokenQuantity.toLocaleString()} BBLIP</span>
+            {/* Cost Calculation */}
+            {tokenQuantity > 0 && (
+              <div className="bg-gray-50 rounded-lg p-4">
+                <div className="space-y-2">
+                  <div className="flex justify-between text-sm">
+                    <span>Token Quantity:</span>
+                    <span>{tokenQuantity.toLocaleString()} BBLIP</span>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span>Price per Token:</span>
+                    <span>$0.10</span>
+                  </div>
+                  <div className="border-t pt-2">
+                    <div className="flex justify-between font-semibold">
+                      <span>Total Cost:</span>
+                      <span>${totalUsdCost.toFixed(2)}</span>
+                    </div>
                   </div>
                   
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">Price per Token:</span>
-                    <span className="font-medium">${BBLIP_PRICE_USD}</span>
-                  </div>
-                  
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">Total USD Cost:</span>
-                    <span className="font-medium">${totalUsdCost.toFixed(2)}</span>
-                  </div>
-                  
-                  {selectedAsset === 'BNB' && (
-                    <>
-                      <div className="flex justify-between">
-                        <span className="text-gray-600">Current BNB Price:</span>
-                        <span className="font-medium">
-                          {priceLoading ? 'Loading...' : `$${bnbPrice.toFixed(2)}`}
-                        </span>
-                      </div>
-                      
-                      <div className="flex justify-between">
-                        <span className="text-gray-600">Required BNB:</span>
-                        <span className="font-medium">{requiredAmount.toFixed(6)} BNB</span>
-                      </div>
-                    </>
-                  )}
-                  
-                  {selectedAsset === 'BSC-USD' && (
-                    <div className="flex justify-between">
-                      <span className="text-gray-600">Required BSC-USD:</span>
-                      <span className="font-medium">{requiredAmount.toFixed(2)} BSC-USD</span>
+                  {/* Insufficient balance warning */}
+                  {!sufficientBalance && tokenQuantity > 0 && (
+                    <div className="bg-red-50 border border-red-200 rounded-lg p-3 mt-3">
+                      <p className="text-red-600 text-sm">
+                        Insufficient balance. You need ${totalUsdCost.toFixed(2)} but only have ${totalAvailableUsd.toFixed(2)} available.
+                      </p>
                     </div>
                   )}
-                </div>
-                
-                {/* Balance Check */}
-                <div className={`p-4 rounded-lg ${sufficientBalance ? 'bg-green-50 border border-green-200' : 'bg-red-50 border border-red-200'}`}>
-                  <div className="flex items-center">
-                    <svg 
-                      className={`w-5 h-5 mr-2 ${sufficientBalance ? 'text-green-500' : 'text-red-500'}`}
-                      fill="currentColor" 
-                      viewBox="0 0 20 20"
-                    >
-                      {sufficientBalance ? (
-                        <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                      ) : (
-                        <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
-                      )}
-                    </svg>
-                    <span className={`text-sm font-medium ${sufficientBalance ? 'text-green-700' : 'text-red-700'}`}>
-                      {sufficientBalance 
-                        ? 'Sufficient balance available' 
-                        : `Insufficient balance. You need ${requiredAmount.toFixed(6)} ${selectedAsset} but only have ${userBalances.find(b => b.token_symbol === selectedAsset)?.balance || '0'} ${selectedAsset}`
-                      }
-                    </span>
-                  </div>
                 </div>
               </div>
             )}
@@ -313,41 +296,29 @@ function PresaleContent() {
             {/* Purchase Button */}
             <button
               onClick={handlePurchase}
-              disabled={!sufficientBalance || tokenQuantity <= 0 || !selectedAsset || priceLoading}
-              className="w-full bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 disabled:from-gray-400 disabled:to-gray-500 text-white font-semibold py-4 px-6 rounded-lg transition duration-200 disabled:cursor-not-allowed"
+              disabled={!sufficientBalance || tokenQuantity <= 0 || balancesLoading || priceLoading}
+              className="w-full bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 disabled:from-gray-400 disabled:to-gray-500 text-white font-bold py-4 px-6 rounded-lg transition duration-200 disabled:cursor-not-allowed"
             >
-              Proceed to Checkout
+              {balancesLoading || priceLoading ? (
+                <div className="flex items-center justify-center">
+                  <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white mr-2"></div>
+                  Loading...
+                </div>
+              ) : tokenQuantity <= 0 ? (
+                'Enter Token Quantity'
+              ) : !sufficientBalance ? (
+                'Insufficient Balance'
+              ) : (
+                `Purchase ${tokenQuantity.toLocaleString()} BBLIP for $${totalUsdCost.toFixed(2)}`
+              )}
             </button>
-            
-            {/* Disclaimer */}
-            <div className="text-xs text-gray-500 text-center">
-              <p>* This is a demo presale interface. No actual transactions will be processed.</p>
-              <p>* BBLIP tokens are for demonstration purposes only.</p>
-            </div>
-          </div>
-        </div>
 
-        {/* Presale Info */}
-        <div className="bg-white rounded-2xl shadow-xl p-6 mt-6">
-          <h2 className="text-xl font-bold text-gray-900 mb-4">Presale Information</h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div>
-              <h3 className="font-semibold text-gray-800 mb-2">Token Details</h3>
-              <ul className="text-sm text-gray-600 space-y-1">
-                <li>• Token Name: BBLIP</li>
-                <li>• Presale Price: $0.1 per token</li>
-                <li>• Accepted Assets: BNB, BSC-USD</li>
-                <li>• Network: BSC Mainnet</li>
-              </ul>
-            </div>
-            <div>
-              <h3 className="font-semibold text-gray-800 mb-2">How it Works</h3>
-              <ul className="text-sm text-gray-600 space-y-1">
-                <li>• Enter desired token quantity</li>
-                <li>• Select payment asset from your balance</li>
-                <li>• Review calculated price</li>
-                <li>• Complete purchase (Demo only)</li>
-              </ul>
+            {/* Notice */}
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+              <p className="text-blue-800 text-sm">
+                <strong>Notice:</strong> Payment will be automatically deducted from your assets based on your priority settings. 
+                You can manage your asset spending priorities in the Dashboard.
+              </p>
             </div>
           </div>
         </div>

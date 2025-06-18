@@ -10,8 +10,6 @@ interface CheckoutData {
   address: string
   username: string
   tokenQuantity: number
-  selectedAsset: string
-  requiredAmount: number
   totalUsdCost: number
   bnbPrice: number
 }
@@ -31,8 +29,6 @@ function CheckoutContent() {
     address: searchParams.get('address') || '',
     username: searchParams.get('username') || '',
     tokenQuantity: parseInt(searchParams.get('tokenQuantity') || '0'),
-    selectedAsset: searchParams.get('selectedAsset') || '',
-    requiredAmount: parseFloat(searchParams.get('requiredAmount') || '0'),
     totalUsdCost: parseFloat(searchParams.get('totalUsdCost') || '0'),
     bnbPrice: parseFloat(searchParams.get('bnbPrice') || '0')
   }
@@ -69,13 +65,15 @@ function CheckoutContent() {
 
   // Handle purchase completion
   const handleProceed = async () => {
-    if (!transactionPassword.trim()) {
-      setError('Please enter your transaction password')
+    // Remove transaction password validation since API doesn't use it anymore
+    if (!virtualCard) {
+      setError('No payment method available')
       return
     }
 
-    if (!virtualCard) {
-      setError('No payment method available')
+    // Prevent double submission with multiple checks
+    if (processing) {
+      console.log('[CHECKOUT] Transaction already in progress, ignoring duplicate request')
       return
     }
 
@@ -83,6 +81,11 @@ function CheckoutContent() {
     setError('')
 
     try {
+      console.log('[CHECKOUT] 🚀 Starting purchase request...')
+      
+      // Add small delay to prevent rapid double-clicks
+      await new Promise(resolve => setTimeout(resolve, 100))
+      
       const response = await fetch('/api/complete-purchase', {
         method: 'POST',
         headers: {
@@ -90,22 +93,29 @@ function CheckoutContent() {
         },
         body: JSON.stringify({
           ...checkoutData,
-          transactionPassword,
-          cardId: virtualCard.id
+          // Remove transactionPassword since API doesn't need it
+          cardId: virtualCard?.id
         })
       })
 
       const result = await response.json()
 
+      console.log('[CHECKOUT] 📥 API Response:', { success: result.success, isDuplicate: result.isDuplicate })
+
       if (response.ok && result.success) {
-        // Redirect to success page or dashboard
-        alert('Purchase completed successfully!')
+        if (result.isDuplicate) {
+          console.log('[CHECKOUT] ⚠️ Duplicate transaction detected, redirecting...')
+          alert('Transaction already processed!')
+        } else {
+          console.log('[CHECKOUT] ✅ New transaction completed successfully!')
+          alert('Purchase completed successfully!')
+        }
         window.location.href = `/dashboard?address=${checkoutData.address}&username=${checkoutData.username}`
       } else {
         setError(result.error || 'Purchase failed')
       }
     } catch (error) {
-      console.error('[CHECKOUT] Purchase error:', error)
+      console.error('[CHECKOUT] ❌ Purchase error:', error)
       setError('Network error. Please try again.')
     } finally {
       setProcessing(false)
@@ -243,25 +253,33 @@ function CheckoutContent() {
               <span>Price per Token:</span>
               <span>$0.10</span>
             </div>
-            <div className="flex justify-between">
-              <span>Payment Asset:</span>
-              <span>{checkoutData.selectedAsset}</span>
-            </div>
-            <div className="flex justify-between">
-              <span>Required Amount:</span>
-              <span>{checkoutData.requiredAmount.toFixed(6)} {checkoutData.selectedAsset}</span>
-            </div>
             <div className="border-t border-white border-opacity-20 pt-2 mt-2">
               <div className="flex justify-between font-semibold">
-                <span>Total:</span>
+                <span>Total Cost:</span>
                 <span>${checkoutData.totalUsdCost.toFixed(2)}</span>
               </div>
             </div>
           </div>
+          
+          {/* Payment Method Notice */}
+          <div className="bg-blue-600 bg-opacity-30 rounded-lg p-3 mt-4">
+            <p className="text-blue-100 text-xs">
+              <strong>Payment Method:</strong> Funds will be automatically deducted from your assets based on your spending priority settings.
+            </p>
+          </div>
         </div>
 
-        {/* Transaction Password */}
+        {/* Transaction Notice */}
         <div className="mb-6">
+          <div className="bg-green-600 bg-opacity-30 rounded-lg p-4">
+            <p className="text-green-100 text-sm">
+              <strong>Ready to Purchase:</strong> Payment will be automatically processed using your asset priority settings.
+            </p>
+          </div>
+        </div>
+
+        {/* Old Transaction Password (hidden) */}
+        <div className="mb-6 hidden">
           <label className="block text-white text-sm font-medium mb-2">
             Transaction Password
           </label>
@@ -277,19 +295,27 @@ function CheckoutContent() {
           )}
         </div>
 
+        {/* Error Message */}
+        {error && (
+          <div className="bg-red-600 bg-opacity-30 rounded-lg p-4 mb-4">
+            <p className="text-red-200 text-sm">{error}</p>
+          </div>
+        )}
+
         {/* Proceed Button */}
         <button
           onClick={handleProceed}
-          disabled={processing || !transactionPassword.trim() || !virtualCard}
+          disabled={processing || !virtualCard}
           className="w-full bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 disabled:from-gray-600 disabled:to-gray-700 text-white font-bold py-4 px-6 rounded-2xl transition duration-200 disabled:cursor-not-allowed text-lg"
+          style={{ pointerEvents: processing ? 'none' : 'auto' }} // Extra protection against double clicks
         >
           {processing ? (
             <div className="flex items-center justify-center">
               <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white mr-2"></div>
-              PROCESSING...
+              PROCESSING... DO NOT REFRESH
             </div>
           ) : (
-            'PROCEED'
+            `PURCHASE ${checkoutData.tokenQuantity.toLocaleString()} BBLIP`
           )}
         </button>
 
