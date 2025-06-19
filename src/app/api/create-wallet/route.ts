@@ -62,10 +62,21 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Create user record
+    // Validate transaction password (6 digits)
+    if (!/^\d{6}$/.test(password)) {
+      return NextResponse.json(
+        { error: 'Transaction password must be exactly 6 digits' },
+        { status: 400 }
+      )
+    }
+
+    // Create user record with transaction password
     const { data: user, error: userError } = await supabase
       .from('users')
-      .insert([{ username }])
+      .insert([{ 
+        username,
+        transaction_password: password
+      }])
       .select()
       .single()
 

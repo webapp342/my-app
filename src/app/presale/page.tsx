@@ -9,13 +9,23 @@ interface UserBalance {
   token_symbol: string
   balance: string
   network: string
+  usd_value?: number
+}
+
+interface AssetPriority {
+  id: string
+  token_symbol: string
+  priority_order: number
+  is_enabled: boolean
 }
 
 function PresaleContent() {
   const searchParams = useSearchParams()
   const [mounted, setMounted] = useState(false)
   const [userBalances, setUserBalances] = useState<UserBalance[]>([])
+  const [assetPriorities, setAssetPriorities] = useState<AssetPriority[]>([])
   const [balancesLoading, setBalancesLoading] = useState(false)
+  const [tokenPrices, setTokenPrices] = useState<Record<string, number>>({})
   
   // Form state - removed selectedAsset
   const [tokenQuantity, setTokenQuantity] = useState<number>(0)
@@ -34,55 +44,89 @@ function PresaleContent() {
     setMounted(true)
   }, [])
 
-  // Fetch user balances
+  // Fetch user balances and asset priorities
   useEffect(() => {
-    const fetchUserBalances = async () => {
+    const fetchData = async () => {
       if (!userId || !mounted) return
       
       setBalancesLoading(true)
       try {
-        const response = await fetch(`/api/get-user-balances?userId=${userId}`)
-        const data = await response.json()
+        // Fetch balances and priorities in parallel
+        const [balancesResponse, prioritiesResponse] = await Promise.all([
+          fetch(`/api/get-user-balances?userId=${userId}`),
+          fetch(`/api/asset-priorities?userId=${userId}`)
+        ])
         
-        if (response.ok && data.success) {
-          // Filter only BNB and BSC-USD
-          const filteredBalances = data.balances.filter((balance: UserBalance) => 
-            balance.token_symbol === 'BNB' || balance.token_symbol === 'BSC-USD'
+        const balancesData = await balancesResponse.json()
+        const prioritiesData = await prioritiesResponse.json()
+        
+        if (balancesResponse.ok && balancesData.success) {
+          // Get all balances (not just BNB and BSC-USD)
+          const allBalances = balancesData.balances.filter((balance: UserBalance) => 
+            parseFloat(balance.balance) > 0 && balance.token_symbol !== 'BBLIP' // Exclude BBLIP and zero balances
           )
-          setUserBalances(filteredBalances)
-        } else {
-          console.warn('[PRESALE] Could not fetch user balances:', data.error)
+          setUserBalances(allBalances)
         }
+        
+        if (prioritiesResponse.ok && prioritiesData.success) {
+          setAssetPriorities(prioritiesData.priorities.filter((p: AssetPriority) => p.is_enabled))
+        }
+        
       } catch (error) {
-        console.error('[PRESALE] Error fetching user balances:', error)
+        console.error('[PRESALE] Error fetching data:', error)
       } finally {
         setBalancesLoading(false)
       }
     }
 
-    fetchUserBalances()
+    fetchData()
   }, [userId, mounted])
 
-  // Fetch BNB price
+  // Fetch token prices
   useEffect(() => {
-    const fetchBnbPrice = async () => {
+    const fetchTokenPrices = async () => {
+      if (userBalances.length === 0) return
+      
       setPriceLoading(true)
       try {
-        const response = await fetch('/api/get-binance-price?symbol=BNBUSDT')
-        const data = await response.json()
+        const uniqueTokens = [...new Set(userBalances.map(b => b.token_symbol))]
+        const prices: Record<string, number> = {}
         
-        if (response.ok && data.price) {
-          setBnbPrice(parseFloat(data.price))
+        // Fetch prices for all tokens
+        for (const token of uniqueTokens) {
+          try {
+            const response = await fetch(`/api/get-binance-price?symbol=${token}`)
+            const data = await response.json()
+            
+            if (response.ok && data.price) {
+              prices[token] = parseFloat(data.price)
+            } else {
+              // Default prices for stablecoins
+              if (['BSC-USD', 'USDT', 'USDC', 'BUSD'].includes(token)) {
+                prices[token] = 1.0
+              }
+            }
+          } catch (error) {
+            console.error(`[PRESALE] Error fetching ${token} price:`, error)
+            // Default to 1 for stablecoins
+            if (['BSC-USD', 'USDT', 'USDC', 'BUSD'].includes(token)) {
+              prices[token] = 1.0
+            }
+          }
         }
+        
+        setTokenPrices(prices)
+        setBnbPrice(prices.BNB || 0)
+        
       } catch (error) {
-        console.error('[PRESALE] Error fetching BNB price:', error)
+        console.error('[PRESALE] Error fetching token prices:', error)
       } finally {
         setPriceLoading(false)
       }
     }
 
-    fetchBnbPrice()
-  }, [])
+    fetchTokenPrices()
+  }, [userBalances])
 
   // Calculate total USD cost
   const calculateTotalUsdCost = () => {
@@ -94,13 +138,16 @@ function PresaleContent() {
   const calculateTotalAvailableUsd = () => {
     let totalUsd = 0
     
-    userBalances.forEach(balance => {
-      const balanceAmount = parseFloat(balance.balance)
+    // Check all supported tokens
+    const supportedTokens = ['BNB', 'BSC-USD', 'AAVE', 'UNI', 'LINK', 'DOT', 'ADA', 'USDC', 'BUSD', 'SOL', 'XRP', 'DOGE', 'LTC', 'BCH', 'MATIC', 'SHIB', 'AVAX']
+    
+    supportedTokens.forEach(token => {
+      const balance = userBalances.find(b => b.token_symbol === token)
+      const balanceAmount = balance ? parseFloat(balance.balance) : 0
+      const tokenPrice = tokenPrices[token] || 0
       
-      if (balance.token_symbol === 'BNB' && bnbPrice > 0) {
-        totalUsd += balanceAmount * bnbPrice
-      } else if (balance.token_symbol === 'BSC-USD') {
-        totalUsd += balanceAmount // BSC-USD is pegged to $1
+      if (tokenPrice > 0 && balanceAmount > 0) {
+        totalUsd += balanceAmount * tokenPrice
       }
     })
     
@@ -217,35 +264,47 @@ function PresaleContent() {
                   <div className="h-4 bg-gray-200 rounded mb-2"></div>
                   <div className="h-4 bg-gray-200 rounded w-3/4"></div>
                 </div>
-              ) : userBalances.length > 0 ? (
+              ) : (
                 <div className="space-y-2">
-                  {userBalances.map((balance) => {
-                    const balanceAmount = parseFloat(balance.balance)
-                    let usdValue = 0
-                    
-                    if (balance.token_symbol === 'BNB' && bnbPrice > 0) {
-                      usdValue = balanceAmount * bnbPrice
-                    } else if (balance.token_symbol === 'BSC-USD') {
-                      usdValue = balanceAmount
-                    }
-                    
-                    return (
-                      <div key={balance.id} className="bg-gray-50 rounded-lg p-3 flex justify-between items-center">
-                        <div>
-                          <span className="font-medium text-gray-900">{balance.token_symbol}</span>
-                          <span className="text-sm text-gray-500 ml-2">({balance.network})</span>
-                        </div>
-                        <div className="text-right">
-                          <div className="font-semibold text-gray-900">
-                            {balanceAmount.toFixed(6)}
+                  {/* Show all supported tokens */}
+                  {['BNB', 'BSC-USD', 'AAVE', 'UNI', 'LINK', 'DOT', 'ADA', 'USDC', 'BUSD', 'SOL', 'XRP', 'DOGE', 'LTC', 'BCH', 'MATIC', 'SHIB', 'AVAX', 'BBLIP']
+                    .filter(token => token !== 'BBLIP') // Exclude BBLIP from purchase options
+                    .sort((a, b) => {
+                      // Sort by asset priority order
+                      const aPriority = assetPriorities.find(p => p.token_symbol === a)?.priority_order || 999
+                      const bPriority = assetPriorities.find(p => p.token_symbol === b)?.priority_order || 999
+                      return aPriority - bPriority
+                    })
+                    .map((token) => {
+                      // Find balance for this token
+                      const balance = userBalances.find(b => b.token_symbol === token)
+                      const balanceAmount = balance ? parseFloat(balance.balance) : 0
+                      const tokenPrice = tokenPrices[token] || 0
+                      const usdValue = balanceAmount * tokenPrice
+                      const priority = assetPriorities.find(p => p.token_symbol === token)?.priority_order
+                      
+                      return (
+                        <div key={token} className="bg-gray-50 rounded-lg p-3 flex justify-between items-center">
+                          <div>
+                            <span className="font-medium text-gray-900">{token}</span>
+                            {priority && (
+                              <span className="text-xs bg-purple-100 text-purple-700 px-2 py-1 rounded-full ml-2">
+                                Priority {priority}
+                              </span>
+                            )}
+                            <div className="text-sm text-gray-500">(BSC_MAINNET)</div>
                           </div>
-                          <div className="text-sm text-gray-500">
-                            ≈ ${usdValue.toFixed(2)}
+                          <div className="text-right">
+                            <div className="font-semibold text-gray-900">
+                              {balanceAmount.toFixed(6)}
+                            </div>
+                            <div className="text-sm text-gray-500">
+                              ≈ ${usdValue.toFixed(2)}
+                            </div>
                           </div>
                         </div>
-                      </div>
-                    )
-                  })}
+                      )
+                    })}
                   <div className="bg-purple-50 rounded-lg p-3 border border-purple-200">
                     <div className="flex justify-between items-center">
                       <span className="font-medium text-purple-900">Total Available</span>
@@ -254,10 +313,6 @@ function PresaleContent() {
                       </span>
                     </div>
                   </div>
-                </div>
-              ) : (
-                <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-                  <p className="text-red-600">No supported assets found. Please ensure you have BNB or BSC-USD in your wallet.</p>
                 </div>
               )}
             </div>
@@ -312,6 +367,21 @@ function PresaleContent() {
                 `Purchase ${tokenQuantity.toLocaleString()} BBLIP for $${totalUsdCost.toFixed(2)}`
               )}
             </button>
+
+            {/* Network Fee Notice */}
+            <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-4">
+              <div className="flex items-start">
+                <svg className="w-5 h-5 text-yellow-600 mt-0.5 mr-2 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                </svg>
+                <div>
+                  <p className="text-yellow-800 text-sm font-medium">Network Fee Required</p>
+                  <p className="text-yellow-700 text-sm mt-1">
+                    Each purchase requires <strong>1 BBLIP</strong> as network fee. Make sure you have sufficient BBLIP balance.
+                  </p>
+                </div>
+              </div>
+            </div>
 
             {/* Notice */}
             <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">

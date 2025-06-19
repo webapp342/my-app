@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { fetchTokenPrice } from '@/lib/binance-price'
 
 export async function GET(request: NextRequest) {
   try {
@@ -14,21 +15,14 @@ export async function GET(request: NextRequest) {
 
     console.log(`[BINANCE PRICE] Fetching price for ${symbol}`)
 
-    // Fetch from Binance API
-    const binanceUrl = `https://api.binance.com/api/v3/ticker/price?symbol=${symbol}`
-    const response = await fetch(binanceUrl)
+    // Use our fetchTokenPrice function which handles symbol mapping
+    const price = await fetchTokenPrice(symbol, 'BSC_MAINNET')
     
-    if (!response.ok) {
-      throw new Error(`Binance API error: ${response.status}`)
-    }
-
-    const data = await response.json()
-    
-    console.log(`[BINANCE PRICE] ${symbol} price:`, data.price)
+    console.log(`[BINANCE PRICE] ${symbol} price: $${price}`)
 
     return NextResponse.json({
-      symbol: data.symbol,
-      price: data.price
+      symbol: symbol,
+      price: price.toString()
     })
 
   } catch (error) {

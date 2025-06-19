@@ -60,6 +60,9 @@ CREATE TABLE public.virtual_card_transactions (
   status character varying NOT NULL DEFAULT 'PENDING'::character varying CHECK (status::text = ANY (ARRAY['PENDING'::character varying, 'COMPLETED'::character varying, 'FAILED'::character varying, 'CANCELLED'::character varying]::text[])),
   transaction_date timestamp with time zone NOT NULL DEFAULT timezone('utc'::text, now()),
   created_at timestamp with time zone NOT NULL DEFAULT timezone('utc'::text, now()),
+  purchase_id character varying,
+  bnb_price_at_purchase numeric,
+  metadata jsonb,
   CONSTRAINT virtual_card_transactions_pkey PRIMARY KEY (id),
   CONSTRAINT virtual_card_transactions_card_id_fkey FOREIGN KEY (card_id) REFERENCES public.virtual_cards(id),
   CONSTRAINT virtual_card_transactions_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id)

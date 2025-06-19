@@ -64,7 +64,8 @@ export async function fetchTransactionHistory(
   address: string,
   network: 'ethereum' | 'bsc',
   page: number = 1,
-  limit: number = 20
+  limit: number = 20,
+  startBlock: number = 0
 ): Promise<{
   transactions: Transaction[]
   total: number
@@ -73,10 +74,10 @@ export async function fetchTransactionHistory(
   try {
     // Fetch transaction history
     // Note: EtherscanProvider has limitations, so we'll use direct API calls for better control
-    const transactions = await fetchTransactionsDirectly(address, network, page, limit)
+    const transactions = await fetchTransactionsDirectly(address, network, page, limit, startBlock)
     
     // Fetch token transfers for the same address
-    const tokenTransfers = await fetchTokenTransfers(address, network, page, limit)
+    const tokenTransfers = await fetchTokenTransfers(address, network, page, limit, startBlock)
     
     // Categorize and normalize transactions
     const categorizedTransactions = await categorizeTransactions(
@@ -105,7 +106,8 @@ async function fetchTransactionsDirectly(
   address: string,
   network: 'ethereum' | 'bsc',
   page: number,
-  limit: number
+  limit: number,
+  startBlock: number = 0
 ): Promise<RawTransaction[]> {
   const config = NETWORKS[network]
   
@@ -118,7 +120,7 @@ async function fetchTransactionsDirectly(
     ? 'https://api.etherscan.io/api'
     : 'https://api.bscscan.com/api'
 
-  const url = `${baseUrl}?module=account&action=txlist&address=${address}&startblock=0&endblock=99999999&page=${page}&offset=${limit}&sort=desc&apikey=${config.apiKey}`
+  const url = `${baseUrl}?module=account&action=txlist&address=${address}&startblock=${startBlock}&endblock=99999999&page=${page}&offset=${limit}&sort=desc&apikey=${config.apiKey}`
 
   const response = await fetch(url)
   const data = await response.json()
@@ -146,13 +148,56 @@ async function fetchTransactionsDirectly(
 }
 
 /**
+ * Normalize token symbols to standard format
+ * This helps identify Binance-Peg tokens and other variations
+ */
+function normalizeTokenSymbol(tokenSymbol: string, tokenName: string): string {
+  // Convert to uppercase for comparison
+  const symbol = tokenSymbol.toUpperCase()
+  const name = tokenName.toUpperCase()
+  
+  // Handle Binance-Peg tokens - extract the base symbol
+  if (name.includes('BINANCE-PEG')) {
+    if (name.includes('ETHEREUM')) return 'ETH'
+    if (name.includes('BITCOIN CASH')) return 'BCH' // Bitcoin Cash must come before Bitcoin
+    if (name.includes('BITCOIN')) return 'BTC'
+    if (name.includes('CARDANO')) return 'ADA'
+    if (name.includes('POLKADOT')) return 'DOT'
+    if (name.includes('CHAINLINK')) return 'LINK'
+    if (name.includes('UNISWAP')) return 'UNI'
+    if (name.includes('AAVE')) return 'AAVE'
+    if (name.includes('BUSD')) return 'BUSD'
+    if (name.includes('USD COIN')) return 'USDC'
+    if (name.includes('LITECOIN')) return 'LTC'
+    if (name.includes('DOGECOIN')) return 'DOGE'
+    if (name.includes('POLYGON')) return 'MATIC' // Keep as MATIC for user display
+    if (name.includes('AVALANCHE')) return 'AVAX'
+    if (name.includes('SOLANA')) return 'SOL'
+    if (name.includes('XRP')) return 'XRP'
+  }
+  
+  // Handle common variations
+  if (symbol === 'BTCB') return 'BTC' // Bitcoin BEP20
+  if (symbol === 'WBNB') return 'BNB' // Wrapped BNB
+  if (symbol === 'WETH') return 'ETH' // Wrapped ETH
+  if (symbol === 'WBTC') return 'BTC' // Wrapped BTC
+  
+  // Keep BSC-USD as is (don't convert to USDT)
+  if (symbol === 'BSC-USD' || name.includes('BSC-USD')) return 'BSC-USD'
+  
+  // Return original symbol if no normalization needed
+  return symbol
+}
+
+/**
  * Fetches ERC20 token transfers for an address
  */
 async function fetchTokenTransfers(
   address: string,
   network: 'ethereum' | 'bsc',
   page: number,
-  limit: number
+  limit: number,
+  startBlock: number = 0
 ): Promise<TokenTransfer[]> {
   const config = NETWORKS[network]
   
@@ -165,7 +210,7 @@ async function fetchTokenTransfers(
     ? 'https://api.etherscan.io/api'
     : 'https://api.bscscan.com/api'
 
-  const url = `${baseUrl}?module=account&action=tokentx&address=${address}&page=${page}&offset=${limit}&sort=desc&apikey=${config.apiKey}`
+  const url = `${baseUrl}?module=account&action=tokentx&address=${address}&startblock=${startBlock}&endblock=99999999&page=${page}&offset=${limit}&sort=desc&apikey=${config.apiKey}`
 
   try {
     const response = await fetch(url)
@@ -185,14 +230,19 @@ async function fetchTokenTransfers(
       const decimals = parseInt(tx.tokenDecimal) || 18
       const amount = tx.value
       const formattedAmount = ethers.formatUnits(amount, decimals)
+      
+      // Normalize token symbol for better recognition
+      const originalSymbol = tx.tokenSymbol || 'UNKNOWN'
+      const originalName = tx.tokenName || 'Unknown Token'
+      const normalizedSymbol = normalizeTokenSymbol(originalSymbol, originalName)
 
       return {
         hash: tx.hash,
         from: tx.from,
         to: tx.to,
         tokenAddress: tx.contractAddress,
-        tokenSymbol: tx.tokenSymbol || 'UNKNOWN',
-        tokenName: tx.tokenName || 'Unknown Token',
+        tokenSymbol: normalizedSymbol, // Use normalized symbol
+        tokenName: originalName, // Keep original name for reference
         tokenDecimals: decimals,
         amount: amount,
         formattedAmount: parseFloat(formattedAmount).toFixed(6),
@@ -256,6 +306,7 @@ async function categorizeTransactions(
         tokenSymbol: transfer.tokenSymbol,
         tokenAmount: transfer.formattedAmount,
         tokenDecimals: transfer.tokenDecimals,
+        tokenAddress: transfer.tokenAddress, // Add contract address
         blockNumber: transfer.blockNumber,
         network
       })

@@ -1,7 +1,7 @@
 'use client'
 
 import { useSearchParams } from 'next/navigation'
-import { useState, useEffect, Suspense } from 'react'
+import { useState, useEffect, useCallback, Suspense } from 'react'
 import Link from 'next/link'
 import { useBalanceTracking } from '@/hooks/useBalanceTracking'
 import VirtualCard from '@/components/VirtualCard'
@@ -11,6 +11,7 @@ function DashboardContent() {
   const searchParams = useSearchParams()
   const [totalUsdValue, setTotalUsdValue] = useState(0)
   const [priceLoading, setPriceLoading] = useState(false)
+  const [tokenPrices, setTokenPrices] = useState<Record<string, number>>({})
   const [mounted, setMounted] = useState(false)
   const [userId, setUserId] = useState<string | null>(null)
   const [virtualCards, setVirtualCards] = useState<VirtualCardType[]>([])
@@ -55,30 +56,30 @@ function DashboardContent() {
   }, [address, mounted])
 
   // Fetch user's virtual cards
-  useEffect(() => {
-    const fetchVirtualCards = async () => {
-      if (!userId || !mounted) return
+  const fetchVirtualCards = useCallback(async () => {
+    if (!userId || !mounted) return
+    
+    setCardsLoading(true)
+    try {
+      const response = await fetch(`/api/virtual-cards?userId=${userId}`)
+      const data = await response.json()
       
-      setCardsLoading(true)
-      try {
-        const response = await fetch(`/api/virtual-cards?userId=${userId}`)
-        const data = await response.json()
-        
-        if (response.ok && data.success) {
-          setVirtualCards(data.cards || [])
-          console.log('[DASHBOARD] Found virtual cards:', data.cards?.length || 0)
-        } else {
-          console.warn('[DASHBOARD] Could not fetch virtual cards:', data.error)
-        }
-      } catch (error) {
-        console.error('[DASHBOARD] Error fetching virtual cards:', error)
-      } finally {
-        setCardsLoading(false)
+      if (response.ok && data.success) {
+        setVirtualCards(data.cards || [])
+        console.log('[DASHBOARD] Found virtual cards:', data.cards?.length || 0)
+      } else {
+        console.warn('[DASHBOARD] Could not fetch virtual cards:', data.error)
       }
+    } catch (error) {
+      console.error('[DASHBOARD] Error fetching virtual cards:', error)
+    } finally {
+      setCardsLoading(false)
     }
-
-    fetchVirtualCards()
   }, [userId, mounted])
+
+  useEffect(() => {
+    fetchVirtualCards()
+  }, [fetchVirtualCards])
 
   // Calculate total USD value from stored balances
   useEffect(() => {
@@ -89,29 +90,63 @@ function DashboardContent() {
       try {
         let totalUsd = 0
         
-        // Get current prices from Binance
-        const [bnbResponse, busdResponse] = await Promise.all([
-          fetch('/api/get-binance-price?symbol=BNBUSDT'),
-          fetch('/api/get-binance-price?symbol=BUSDUSDT') // BUSD/USDT pair for USDT price
-        ])
+        // Get current prices from Binance for all tokens we have
+        const currentTokenPrices: Record<string, number> = {}
         
-        const bnbData = await bnbResponse.json()
-        const busdData = await busdResponse.json()
+        // Get unique tokens from balances (excluding stablecoins)
+        const tokensToFetch = [...new Set(
+          balanceTracking.balances
+            .map((b: { token: string; balance: string }) => b.token)
+            .filter((token: string) => !['BUSD', 'BSC-USD', 'USDT', 'USDC'].includes(token))
+        )]
         
-        const bnbUsdtPrice = parseFloat(bnbData.price || '0')
-        const busdUsdtPrice = parseFloat(busdData.price || '1')
-        const usdtUsdPrice = 1 / busdUsdtPrice // Convert BUSD/USDT to USDT/USD (BUSD ≈ $1)
+        console.log('Tokens to fetch prices for:', tokensToFetch)
         
-        console.log('Prices:', { bnbUsdtPrice, busdUsdtPrice, usdtUsdPrice })
+        // Fetch prices for all tokens using the proper API
+        const pricePromises = tokensToFetch.map(async (token: string) => {
+          try {
+            // Use the get-binance-price API which handles symbol mapping correctly
+            const response = await fetch(`/api/get-binance-price?symbol=${token}`)
+            const data = await response.json()
+            const price = parseFloat(data.price || '0')
+            currentTokenPrices[token] = price
+            console.log(`Price for ${token}: $${price}`)
+            return { token, price }
+          } catch (error) {
+            console.error(`Error fetching price for ${token}:`, error)
+            currentTokenPrices[token] = 0
+            return { token, price: 0 }
+          }
+        })
+        
+        await Promise.all(pricePromises)
+        console.log('All token prices:', currentTokenPrices)
+        
+        // Update state with current prices
+        setTokenPrices(currentTokenPrices)
         
         // Calculate total value
         for (const balance of balanceTracking.balances) {
           const amount = parseFloat(balance.balance)
+          const token = balance.token
           
-          if (balance.token === 'BNB') {
-            totalUsd += amount * bnbUsdtPrice * usdtUsdPrice
-          } else if (balance.token === 'BSC-USD' || balance.token === 'USDT') {
-            totalUsd += amount * usdtUsdPrice
+          console.log(`Calculating value for ${token}: ${amount}`)
+          
+          // Handle stablecoins (always $1)
+          if (['BUSD', 'BSC-USD', 'USDT', 'USDC'].includes(token)) {
+            totalUsd += amount
+            console.log(`${token}: ${amount} * 1 = $${amount}`)
+          } 
+          // Handle tokens with fetched prices
+          else if (currentTokenPrices[token] !== undefined) {
+            const price = currentTokenPrices[token]
+            const usdValue = amount * price
+            totalUsd += usdValue
+            console.log(`${token}: ${amount} * ${price} = $${usdValue}`)
+          } 
+          // Handle unknown tokens
+          else {
+            console.log(`${token}: ${amount} - no price data available, skipping...`)
           }
         }
         
@@ -246,8 +281,7 @@ function DashboardContent() {
               <div className="mt-4 pt-4 border-t border-gray-200">
                 <h3 className="text-sm font-medium text-gray-700 mb-2">Asset Breakdown</h3>
                 <div className="space-y-2">
-                  {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
-                  {balanceTracking.balances.map((balance: any, index: number) => (
+                  {balanceTracking.balances.map((balance: { token: string; balance: string }, index: number) => (
                     <div key={index} className="flex justify-between text-sm">
                       <span className="text-gray-600">{balance.token}:</span>
                       <span className="font-medium">{parseFloat(balance.balance).toFixed(6)}</span>
@@ -400,38 +434,43 @@ function DashboardContent() {
               </div>
             </div>
 
-            {balanceTracking.balances.length > 0 && (
-              <div className="mt-6">
-                <h3 className="text-md font-semibold text-gray-900 mb-3">Token Balances</h3>
-                <div className="space-y-3">
-                  {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
-                  {balanceTracking.balances.map((balance: any, index: number) => (
-                    <div key={index} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+            <div className="mt-6">
+              <h3 className="text-md font-semibold text-gray-900 mb-3">Token Balances</h3>
+              <div className="space-y-3">
+                {/* Show all supported tokens */}
+                {['BNB', 'BSC-USD', 'AAVE', 'UNI', 'LINK', 'DOT', 'ADA', 'USDC', 'BUSD', 'SOL', 'XRP', 'DOGE', 'LTC', 'BCH', 'MATIC', 'SHIB', 'AVAX', 'BBLIP'].map((token) => {
+                  // Find balance for this token
+                  const balance = balanceTracking.balances.find((b: { token: string; balance: string }) => b.token === token)
+                  const amount = balance ? parseFloat(balance.balance) : 0
+                  
+                  // Calculate USD value
+                  let usdValue = 0
+                  if (['BUSD', 'BSC-USD', 'USDT', 'USDC'].includes(token)) {
+                    usdValue = amount // Stablecoins = $1
+                  } else if (tokenPrices && tokenPrices[token]) {
+                    usdValue = amount * tokenPrices[token]
+                  }
+                  
+                  return (
+                    <div key={token} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
                       <div className="flex items-center">
                         <div className="w-8 h-8 bg-gradient-to-r from-blue-500 to-purple-600 rounded-full flex items-center justify-center text-white text-sm font-bold mr-3">
-                          {balance.token.charAt(0)}
+                          {token.charAt(0)}
                         </div>
                         <div>
-                          <div className="font-medium text-gray-900">{balance.token}</div>
-                          <div className="text-sm text-gray-500">{balance.network}</div>
+                          <div className="font-medium text-gray-900">{token}</div>
+                          <div className="text-sm text-gray-500">{amount.toFixed(6)} {token}</div>
                         </div>
                       </div>
                       <div className="text-right">
-                        <div className="font-medium text-gray-900">{balance.balance}</div>
-                        <div className="text-sm text-gray-500">{balance.token}</div>
+                        <div className="font-medium text-gray-900">${usdValue.toFixed(2)}</div>
+                        <div className="text-sm text-gray-500">USD Value</div>
                       </div>
                     </div>
-                  ))}
-                </div>
+                  )
+                })}
               </div>
-            )}
-
-            {balanceTracking.balances.length === 0 && !balanceTracking.isLoading && !balanceTracking.isSyncing && (
-              <div className="text-center py-8">
-                <div className="text-gray-400 mb-2">No stored balances found</div>
-                <div className="text-sm text-gray-500">Click &quot;Sync Transactions&quot; to track your token balances</div>
-              </div>
-            )}
+            </div>
           </div>
         )}
 
@@ -440,15 +479,37 @@ function DashboardContent() {
           <div className="bg-white rounded-2xl shadow-xl p-6 mb-6">
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-lg font-semibold text-gray-900">Virtual Cards</h2>
-              <button
-                onClick={() => {
-                  // TODO: Implement create new card functionality
-                  console.log('Create new card clicked')
-                }}
-                className="bg-blue-100 hover:bg-blue-200 text-blue-700 font-medium py-2 px-4 rounded-lg transition duration-200 text-sm"
-              >
-                + New Card
-              </button>
+              <div className="flex gap-2">
+                <button
+                  onClick={fetchVirtualCards}
+                  disabled={cardsLoading}
+                  className="bg-green-100 hover:bg-green-200 text-green-700 font-medium py-2 px-4 rounded-lg transition duration-200 text-sm disabled:opacity-50"
+                  title="Refresh virtual cards"
+                >
+                  {cardsLoading ? (
+                    <div className="flex items-center">
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-green-700 mr-1"></div>
+                      Refreshing...
+                    </div>
+                  ) : (
+                    <div className="flex items-center">
+                      <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                      </svg>
+                      Refresh
+                    </div>
+                  )}
+                </button>
+                <button
+                  onClick={() => {
+                    // TODO: Implement create new card functionality
+                    console.log('Create new card clicked')
+                  }}
+                  className="bg-blue-100 hover:bg-blue-200 text-blue-700 font-medium py-2 px-4 rounded-lg transition duration-200 text-sm"
+                >
+                  + New Card
+                </button>
+              </div>
             </div>
 
             {cardsLoading ? (

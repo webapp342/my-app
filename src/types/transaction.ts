@@ -9,6 +9,7 @@ export interface Transaction {
   tokenSymbol?: string // For token transfers
   tokenAmount?: string // Formatted token amount
   tokenDecimals?: number
+  tokenAddress?: string // Contract address for token transfers
   gasUsed?: string
   gasPrice?: string
   blockNumber: number

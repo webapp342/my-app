@@ -1,7 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabase } from '@/lib/supabase'
 
-// GET - Get user's asset spending priorities based on their actual balances
+// All supported tokens in the application
+const SUPPORTED_TOKENS = [
+  'BNB', 'BSC-USD', 'AAVE', 'UNI', 'LINK', 'DOT', 'ADA', 'USDC', 'BUSD', 
+  'SOL', 'XRP', 'DOGE', 'LTC', 'BCH', 'MATIC', 'SHIB', 'AVAX', 'BBLIP'
+]
+
+// GET - Get user's asset spending priorities for all supported tokens
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url)
@@ -14,32 +20,8 @@ export async function GET(request: NextRequest) {
       )
     }
 
-    // First, get user's actual token balances
-    const { data: userBalances, error: balanceError } = await supabase
-      .from('user_balances')
-      .select('token_symbol')
-      .eq('user_id', userId)
-      .gt('balance', 0) // Only tokens with positive balance
-
-    if (balanceError) {
-      console.error('[ASSET PRIORITIES] Balance fetch error:', balanceError)
-      return NextResponse.json(
-        { error: 'Failed to fetch user balances' },
-        { status: 500 }
-      )
-    }
-
-    // Get unique token symbols from user balances
-    const availableTokens = [...new Set(userBalances?.map(b => b.token_symbol) || [])]
-
-    if (availableTokens.length === 0) {
-      return NextResponse.json({
-        success: true,
-        priorities: [],
-        availableTokens: [],
-        message: 'No tokens found in user balance'
-      })
-    }
+    // Use all supported tokens instead of just user balances
+    const availableTokens = SUPPORTED_TOKENS
 
     // Get user's existing priorities for their tokens
     const { data: existingPriorities, error: priorityError } = await supabase
@@ -128,19 +110,12 @@ export async function PUT(request: NextRequest) {
       }
     }
 
-    // Verify that all tokens exist in user's balances
-    const { data: userBalances } = await supabase
-      .from('user_balances')
-      .select('token_symbol')
-      .eq('user_id', userId)
-      .gt('balance', 0)
-
-    const availableTokens = userBalances?.map(b => b.token_symbol) || []
-    const invalidTokens = priorities.filter(p => !availableTokens.includes(p.token_symbol))
+    // Verify that all tokens are supported
+    const invalidTokens = priorities.filter(p => !SUPPORTED_TOKENS.includes(p.token_symbol))
 
     if (invalidTokens.length > 0) {
       return NextResponse.json(
-        { error: `Invalid tokens: ${invalidTokens.map(t => t.token_symbol).join(', ')}. You can only prioritize tokens you own.` },
+        { error: `Invalid tokens: ${invalidTokens.map(t => t.token_symbol).join(', ')}. Only supported tokens can be prioritized.` },
         { status: 400 }
       )
     }

@@ -143,8 +143,22 @@ function AssetPrioritiesContent() {
   const assetInfo: Record<string, { name: string, color: string, icon: string }> = {
     'BNB': { name: 'Binance Coin', color: 'bg-yellow-500', icon: '🪙' },
     'BSC-USD': { name: 'BSC-USD', color: 'bg-green-500', icon: '💵' },
-    'USDT': { name: 'Tether USD', color: 'bg-blue-500', icon: '💰' },
-    'BUSD': { name: 'Binance USD', color: 'bg-purple-500', icon: '💳' }
+    'AAVE': { name: 'Aave', color: 'bg-purple-600', icon: '🏦' },
+    'UNI': { name: 'Uniswap', color: 'bg-pink-500', icon: '🦄' },
+    'LINK': { name: 'Chainlink', color: 'bg-blue-600', icon: '🔗' },
+    'DOT': { name: 'Polkadot', color: 'bg-red-500', icon: '⚫' },
+    'ADA': { name: 'Cardano', color: 'bg-blue-700', icon: '♠️' },
+    'USDC': { name: 'USD Coin', color: 'bg-blue-500', icon: '💰' },
+    'BUSD': { name: 'Binance USD', color: 'bg-purple-500', icon: '💳' },
+    'SOL': { name: 'Solana', color: 'bg-purple-400', icon: '☀️' },
+    'XRP': { name: 'XRP', color: 'bg-gray-700', icon: '💎' },
+    'DOGE': { name: 'Dogecoin', color: 'bg-yellow-400', icon: '🐕' },
+    'LTC': { name: 'Litecoin', color: 'bg-gray-500', icon: '⚡' },
+    'BCH': { name: 'Bitcoin Cash', color: 'bg-green-600', icon: '💚' },
+    'MATIC': { name: 'Polygon', color: 'bg-purple-700', icon: '🔷' },
+    'SHIB': { name: 'Shiba Inu', color: 'bg-orange-500', icon: '🐕' },
+    'AVAX': { name: 'Avalanche', color: 'bg-red-600', icon: '🏔️' },
+    'BBLIP': { name: 'BBLIP Token', color: 'bg-indigo-600', icon: '🚀' }
   }
 
   if (!mounted) {

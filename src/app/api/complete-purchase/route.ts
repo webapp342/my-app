@@ -12,10 +12,73 @@ export async function POST(request: NextRequest) {
   
   try {
     const body = await request.json()
-    const { userId, address, tokenQuantity, totalUsdCost, bnbPrice, cardId } = body
+    const { userId, tokenQuantity, totalUsdCost, bnbPrice, cardId, transactionPassword } = body
 
     requestCounter++
     console.log(`[PURCHASE] 🚀 Request #${requestCounter}: ${tokenQuantity} BBLIP for $${totalUsdCost}`)
+
+    // Validate required fields
+    if (!transactionPassword) {
+      return NextResponse.json({ error: 'Transaction password is required' }, { status: 400 })
+    }
+
+    // Validate transaction password format (6 digits)
+    if (!/^\d{6}$/.test(transactionPassword)) {
+      return NextResponse.json({ error: 'Transaction password must be 6 digits' }, { status: 400 })
+    }
+
+    // Verify transaction password against user's stored password
+    const { data: userData, error: userError } = await supabase
+      .from('users')
+      .select('transaction_password')
+      .eq('id', userId)
+      .single()
+
+    if (userError || !userData) {
+      console.error(`[PURCHASE] ❌ User not found:`, userError)
+      return NextResponse.json({ error: 'User not found' }, { status: 404 })
+    }
+
+    if (!userData.transaction_password) {
+      return NextResponse.json({ error: 'Transaction password not set. Please set your password in wallet settings.' }, { status: 400 })
+    }
+
+    if (userData.transaction_password !== transactionPassword) {
+      console.log(`[PURCHASE] ❌ Invalid transaction password for user ${userId}`)
+      return NextResponse.json({ error: 'Invalid transaction password' }, { status: 401 })
+    }
+
+    console.log(`[PURCHASE] ✅ Transaction password verified for user ${userId}`)
+
+    // NETWORK FEE: Check BBLIP balance for 1 BBLIP network fee
+    const NETWORK_FEE_BBLIP = 1
+    console.log(`[PURCHASE] 🔍 Checking BBLIP balance for network fee: ${NETWORK_FEE_BBLIP} BBLIP`)
+    
+    const { data: bblipBalance, error: bblipError } = await supabase
+      .from('user_balances')
+      .select('balance')
+      .eq('user_id', userId)
+      .eq('token_symbol', 'BBLIP')
+      .single()
+
+    if (bblipError || !bblipBalance) {
+      console.log(`[PURCHASE] ❌ No BBLIP balance found for network fee`)
+      return NextResponse.json({ 
+        error: `Network fee required: ${NETWORK_FEE_BBLIP} BBLIP. You don't have any BBLIP tokens for network fees.` 
+      }, { status: 400 })
+    }
+
+    const currentBblipBalance = parseFloat(bblipBalance.balance)
+    console.log(`[PURCHASE] 💰 Current BBLIP balance: ${currentBblipBalance}`)
+
+    if (currentBblipBalance < NETWORK_FEE_BBLIP) {
+      console.log(`[PURCHASE] ❌ Insufficient BBLIP for network fee: need ${NETWORK_FEE_BBLIP}, have ${currentBblipBalance}`)
+      return NextResponse.json({ 
+        error: `Insufficient BBLIP for network fee. Need ${NETWORK_FEE_BBLIP} BBLIP, you have ${currentBblipBalance.toFixed(6)} BBLIP.` 
+      }, { status: 400 })
+    }
+
+    console.log(`[PURCHASE] ✅ BBLIP network fee check passed: ${currentBblipBalance} >= ${NETWORK_FEE_BBLIP}`)
 
     // Create unique purchase ID
     purchaseId = `${userId}-${tokenQuantity}-${Date.now()}`
@@ -30,12 +93,14 @@ export async function POST(request: NextRequest) {
     activePurchases.add(purchaseId)
     console.log(`[PURCHASE] ✅ Purchase marked as active: ${purchaseId}`)
 
-    // 1. GET USER'S CURRENT BALANCES
+    // 1. GET USER'S CURRENT BALANCES (ALL SUPPORTED TOKENS EXCEPT BBLIP)
+    const supportedTokens = ['BNB', 'BSC-USD', 'AAVE', 'UNI', 'LINK', 'DOT', 'ADA', 'USDC', 'BUSD', 'SOL', 'XRP', 'DOGE', 'LTC', 'BCH', 'MATIC', 'SHIB', 'AVAX']
+    
     const { data: balances, error: balanceError } = await supabase
       .from('user_balances')
       .select('*')
       .eq('user_id', userId)
-      .in('token_symbol', ['BNB', 'BSC-USD'])
+      .in('token_symbol', supportedTokens) // Only supported tokens
 
     if (balanceError) {
       console.error(`[PURCHASE] ❌ Failed to get balances:`, balanceError)
@@ -44,26 +109,69 @@ export async function POST(request: NextRequest) {
 
     console.log(`[PURCHASE] 💰 Current balances:`, balances?.map(b => `${b.token_symbol}: ${b.balance}`))
 
-    // 2. CALCULATE TOTAL AVAILABLE USD
-    let totalBnb = 0
-    let totalBscUsd = 0
-    const bnbRecords: Array<{ id: string; balance: string; token_symbol: string }> = []
-    const bscUsdRecords: Array<{ id: string; balance: string; token_symbol: string }> = []
+    // 2. FETCH TOKEN PRICES FOR ALL SUPPORTED TOKENS
+    const tokenPrices: Record<string, number> = { BNB: bnbPrice }
+    const uniqueTokens = supportedTokens
+    
+    for (const token of uniqueTokens) {
+      if (token === 'BNB') continue // Already have BNB price
+      
+      try {
+        const response = await fetch(`${process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000'}/api/get-binance-price?symbol=${token}`)
+        const data = await response.json()
+        
+        if (response.ok && data.price) {
+          tokenPrices[token] = parseFloat(data.price)
+        } else {
+          // Default prices for stablecoins
+          if (['BSC-USD', 'USDT', 'USDC', 'BUSD'].includes(token)) {
+            tokenPrices[token] = 1.0
+          } else {
+            tokenPrices[token] = 0
+          }
+        }
+      } catch (error) {
+        console.error(`[PURCHASE] Error fetching ${token} price:`, error)
+        // Default to 1 for stablecoins, 0 for others
+        if (['BSC-USD', 'USDT', 'USDC', 'BUSD'].includes(token)) {
+          tokenPrices[token] = 1.0
+        } else {
+          tokenPrices[token] = 0
+        }
+      }
+    }
+    
+    console.log(`[PURCHASE] 💰 Token prices:`, tokenPrices)
 
+    // 3. CALCULATE TOTAL AVAILABLE USD FOR ALL SUPPORTED TOKENS
+    const tokenBalances: Record<string, { total: number; records: Array<{ id: string; balance: string; token_symbol: string }> }> = {}
+    let totalAvailableUsd = 0
+
+    // Initialize all supported tokens with zero balance
+    for (const token of supportedTokens) {
+      tokenBalances[token] = { total: 0, records: [] }
+    }
+
+    // Add actual balances from database
     for (const balance of balances || []) {
-      if (balance.token_symbol === 'BNB') {
-        totalBnb += parseFloat(balance.balance)
-        bnbRecords.push(balance)
-      } else if (balance.token_symbol === 'BSC-USD') {
-        totalBscUsd += parseFloat(balance.balance)
-        bscUsdRecords.push(balance)
+      const tokenSymbol = balance.token_symbol
+      const balanceAmount = parseFloat(balance.balance)
+      const tokenPrice = tokenPrices[tokenSymbol] || 0
+      
+      tokenBalances[tokenSymbol].total += balanceAmount
+      tokenBalances[tokenSymbol].records.push(balance)
+      
+      if (tokenPrice > 0 && balanceAmount > 0) {
+        totalAvailableUsd += balanceAmount * tokenPrice
       }
     }
 
-    const totalAvailableUsd = (totalBnb * bnbPrice) + totalBscUsd
-    console.log(`[PURCHASE] 💵 Total available: $${totalAvailableUsd.toFixed(2)} (BNB: ${totalBnb}, BSC-USD: ${totalBscUsd})`)
+    console.log(`[PURCHASE] 💵 Total available: $${totalAvailableUsd.toFixed(2)}`)
+    console.log(`[PURCHASE] 📊 Token breakdown:`, Object.entries(tokenBalances).map(([token, data]) => 
+      `${token}: ${data.total.toFixed(6)} (≈ $${(data.total * (tokenPrices[token] || 0)).toFixed(2)})`
+    ))
 
-    // 3. CHECK SUFFICIENT BALANCE
+    // 4. CHECK SUFFICIENT BALANCE
     if (totalAvailableUsd < totalUsdCost) {
       console.log(`[PURCHASE] ❌ Insufficient balance: need $${totalUsdCost}, have $${totalAvailableUsd.toFixed(2)}`)
       return NextResponse.json({ 
@@ -71,7 +179,7 @@ export async function POST(request: NextRequest) {
       }, { status: 400 })
     }
 
-    // 4. GET USER'S ASSET PRIORITIES
+    // 5. GET USER'S ASSET PRIORITIES
     const { data: priorities } = await supabase
       .from('user_asset_priorities')
       .select('*')
@@ -81,55 +189,50 @@ export async function POST(request: NextRequest) {
 
     console.log(`[PURCHASE] 🎯 Asset priorities:`, priorities?.map(p => `${p.token_symbol} (Priority: ${p.priority_order})`))
 
-    // 5. CALCULATE PAYMENT PLAN (SINGLE SOURCE OF TRUTH)
+    // 6. CALCULATE PAYMENT PLAN USING ALL TOKENS BY PRIORITY
     let remainingCost = totalUsdCost
     const paymentPlan: Array<{
       tokenSymbol: string,
       requiredAmount: number,
+      tokenPrice: number,
       records: Array<{ id: string; balance: string; token_symbol: string }>
     }> = []
 
-    // Use BNB first if it's priority 1, otherwise BSC-USD first
-    const bnbFirst = priorities?.find(p => p.token_symbol === 'BNB' && p.priority_order === 1)
-    
-    if (bnbFirst && totalBnb > 0 && remainingCost > 0) {
-      const bnbNeeded = Math.min(remainingCost / bnbPrice, totalBnb)
-      if (bnbNeeded > 0) {
-        paymentPlan.push({
-          tokenSymbol: 'BNB',
-          requiredAmount: bnbNeeded,
-          records: bnbRecords
-        })
-        remainingCost -= bnbNeeded * bnbPrice
-        console.log(`[PURCHASE] 💎 Using ${bnbNeeded.toFixed(6)} BNB ($${(bnbNeeded * bnbPrice).toFixed(2)})`)
-      }
-    }
+    // Sort tokens by priority order (enabled priorities first, then by order)
+    const sortedTokens = Object.keys(tokenBalances).sort((a, b) => {
+      const aPriority = priorities?.find(p => p.token_symbol === a && p.is_enabled)?.priority_order || 999
+      const bPriority = priorities?.find(p => p.token_symbol === b && p.is_enabled)?.priority_order || 999
+      return aPriority - bPriority
+    })
 
-    // Use BSC-USD for remaining cost
-    if (totalBscUsd > 0 && remainingCost > 0.01) {
-      const bscUsdNeeded = Math.min(remainingCost, totalBscUsd)
-      if (bscUsdNeeded > 0) {
-        paymentPlan.push({
-          tokenSymbol: 'BSC-USD',
-          requiredAmount: bscUsdNeeded,
-          records: bscUsdRecords
-        })
-        remainingCost -= bscUsdNeeded
-        console.log(`[PURCHASE] 💵 Using ${bscUsdNeeded.toFixed(6)} BSC-USD ($${bscUsdNeeded.toFixed(2)})`)
-      }
-    }
+    console.log(`[PURCHASE] 🔄 Processing tokens in priority order:`, sortedTokens)
 
-    // Use BNB if it wasn't used first and still needed
-    if (!bnbFirst && totalBnb > 0 && remainingCost > 0.01) {
-      const bnbNeeded = Math.min(remainingCost / bnbPrice, totalBnb)
-      if (bnbNeeded > 0) {
+    for (const tokenSymbol of sortedTokens) {
+      if (remainingCost <= 0.01) break // Stop if we have enough
+      
+      const tokenData = tokenBalances[tokenSymbol]
+      const tokenPrice = tokenPrices[tokenSymbol] || 0
+      
+      if (tokenPrice <= 0 || tokenData.total <= 0) {
+        console.log(`[PURCHASE] ⏭️ Skipping ${tokenSymbol}: price=${tokenPrice}, balance=${tokenData.total}`)
+        continue
+      }
+      
+      // Calculate how much of this token we need
+      const maxTokenNeeded = remainingCost / tokenPrice
+      const tokenToUse = Math.min(maxTokenNeeded, tokenData.total)
+      
+      if (tokenToUse > 0) {
+        const usdValue = tokenToUse * tokenPrice
         paymentPlan.push({
-          tokenSymbol: 'BNB',
-          requiredAmount: bnbNeeded,
-          records: bnbRecords
+          tokenSymbol,
+          requiredAmount: tokenToUse,
+          tokenPrice,
+          records: tokenData.records
         })
-        remainingCost -= bnbNeeded * bnbPrice
-        console.log(`[PURCHASE] 💎 Using ${bnbNeeded.toFixed(6)} BNB ($${(bnbNeeded * bnbPrice).toFixed(2)}) [fallback]`)
+        remainingCost -= usdValue
+        
+        console.log(`[PURCHASE] 💰 Using ${tokenToUse.toFixed(6)} ${tokenSymbol} @ $${tokenPrice.toFixed(2)} = $${usdValue.toFixed(2)}`)
       }
     }
 
@@ -140,9 +243,45 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Insufficient balance for purchase' }, { status: 400 })
     }
 
-    // 6. EXECUTE PAYMENT - SIMPLE DIRECT UPDATES
+    // 6. EXECUTE PAYMENT - WITH PURCHASE ID LINKING
     const transactionHash = `0x${Math.random().toString(16).substr(2, 40)}`
-    console.log(`[PURCHASE] 🔄 Executing payment with transaction: ${transactionHash}`)
+    const masterPurchaseId = `purchase_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+    console.log(`[PURCHASE] 🔄 Executing payment with transaction: ${transactionHash}, Purchase ID: ${masterPurchaseId}`)
+
+    // First, create master purchase transaction
+    const { error: masterTxError } = await supabase
+      .from('virtual_card_transactions')
+      .insert({
+        card_id: cardId,
+        user_id: userId,
+        transaction_type: 'PURCHASE',
+        amount: totalUsdCost.toString(),
+        currency: 'USD',
+        merchant_name: 'BBLIP Presale',
+        merchant_category: 'CRYPTO',
+        description: `BBLIP Token Purchase: ${tokenQuantity.toLocaleString()} BBLIP tokens`,
+        status: 'COMPLETED',
+        purchase_id: masterPurchaseId,
+        bnb_price_at_purchase: bnbPrice.toString(),
+        metadata: JSON.stringify({
+          tokenQuantity,
+          totalUsdCost,
+          bnbPrice,
+          paymentPlan: paymentPlan.map(p => ({
+            tokenSymbol: p.tokenSymbol,
+            requiredAmount: p.requiredAmount,
+            tokenPrice: p.tokenPrice,
+            usdValue: p.requiredAmount * p.tokenPrice
+          }))
+        })
+      })
+
+    if (masterTxError) {
+      console.error(`[PURCHASE] ❌ Failed to record master transaction:`, masterTxError)
+      throw new Error('Failed to record master transaction')
+    }
+
+    console.log(`[PURCHASE] ✅ Created master transaction: ${masterPurchaseId}`)
 
     // Process each payment step
     for (let i = 0; i < paymentPlan.length; i++) {
@@ -164,10 +303,10 @@ export async function POST(request: NextRequest) {
           // SIMPLE DIRECT UPDATE - NO ATOMIC FUNCTIONS NEEDED
           const newBalance = currentBalance - deductAmount
           const { error: updateError } = await supabase
-            .from('user_balances')
-            .update({ 
+          .from('user_balances')
+          .update({ 
               balance: newBalance.toString(),
-              last_updated: new Date().toISOString()
+            last_updated: new Date().toISOString()
             })
             .eq('id', record.id)
 
@@ -181,8 +320,8 @@ export async function POST(request: NextRequest) {
         }
       }
 
-      // Record virtual card transaction for each payment
-      const cardTxAmount = payment.tokenSymbol === 'BNB' ? payment.requiredAmount * bnbPrice : payment.requiredAmount
+      // Record detailed virtual card transaction for each payment method
+      const cardTxAmount = payment.requiredAmount * payment.tokenPrice
       const { error: cardTxError } = await supabase
         .from('virtual_card_transactions')
         .insert({
@@ -193,8 +332,16 @@ export async function POST(request: NextRequest) {
           currency: 'USD',
           merchant_name: 'BBLIP Presale',
           merchant_category: 'CRYPTO',
-          description: `Payment using ${payment.requiredAmount.toFixed(6)} ${payment.tokenSymbol} for BBLIP tokens`,
-          status: 'COMPLETED'
+          description: `Payment Detail: ${payment.requiredAmount.toFixed(6)} ${payment.tokenSymbol} (@ $${payment.tokenPrice.toFixed(2)})`,
+          status: 'COMPLETED',
+          purchase_id: masterPurchaseId,
+          bnb_price_at_purchase: bnbPrice.toString(),
+          metadata: JSON.stringify({
+            tokenSymbol: payment.tokenSymbol,
+            tokenAmount: payment.requiredAmount,
+            tokenPrice: payment.tokenPrice,
+            usdValue: cardTxAmount
+          })
         })
 
       if (cardTxError) {
@@ -202,42 +349,46 @@ export async function POST(request: NextRequest) {
         throw new Error('Failed to record virtual card transaction')
       }
 
-      console.log(`[PURCHASE] ✅ Recorded virtual card transaction: $${cardTxAmount.toFixed(2)} using ${payment.tokenSymbol}`)
+      console.log(`[PURCHASE] ✅ Recorded payment detail transaction: $${cardTxAmount.toFixed(2)} using ${payment.tokenSymbol}`)
     }
 
-    // 7. ADD BBLIP TOKENS
-    console.log(`[PURCHASE] 🎁 Adding ${tokenQuantity} BBLIP tokens`)
+    // 7. DEDUCT NETWORK FEE AND ADD BBLIP TOKENS
+    console.log(`[PURCHASE] 💰 Processing BBLIP: Adding ${tokenQuantity} tokens and deducting ${NETWORK_FEE_BBLIP} network fee`)
 
-    // Check if user already has BBLIP balance
+    // Get current BBLIP balance (we already verified it exists and is sufficient)
     const { data: existingBblip } = await supabase
-      .from('user_balances')
-      .select('*')
-      .eq('user_id', userId)
-      .eq('token_symbol', 'BBLIP')
-      .single()
+          .from('user_balances')
+          .select('*')
+          .eq('user_id', userId)
+          .eq('token_symbol', 'BBLIP')
+          .single()
 
-    if (existingBblip) {
-      // Update existing BBLIP balance
+        if (existingBblip) {
+          // Calculate new balance: current + purchased - network fee
       const oldBalance = parseFloat(existingBblip.balance)
-      const newBblipBalance = oldBalance + tokenQuantity
+      const newBblipBalance = oldBalance + tokenQuantity - NETWORK_FEE_BBLIP
       
-      console.log(`[PURCHASE] 🔍 BBLIP DEBUG - Old: ${oldBalance}, Adding: ${tokenQuantity}, New: ${newBblipBalance}`)
-      console.log(`[PURCHASE] 🔍 BBLIP Record ID: ${existingBblip.id}`)
+      console.log(`[PURCHASE] 🔍 BBLIP CALCULATION:`)
+      console.log(`[PURCHASE] 🔍   Current: ${oldBalance}`)
+      console.log(`[PURCHASE] 🔍   Adding: +${tokenQuantity} (purchased)`)
+      console.log(`[PURCHASE] 🔍   Deducting: -${NETWORK_FEE_BBLIP} (network fee)`)
+      console.log(`[PURCHASE] 🔍   Final: ${newBblipBalance}`)
+      console.log(`[PURCHASE] 🔍   Record ID: ${existingBblip.id}`)
       
       const { error: bblipError } = await supabase
-        .from('user_balances')
-        .update({ 
+            .from('user_balances')
+            .update({ 
           balance: newBblipBalance.toString(),
-          last_updated: new Date().toISOString()
-        })
-        .eq('id', existingBblip.id)
+              last_updated: new Date().toISOString()
+            })
+            .eq('id', existingBblip.id)
 
       if (bblipError) {
         console.error(`[PURCHASE] ❌ Failed to update BBLIP balance:`, bblipError)
         throw new Error('Failed to update BBLIP balance')
       }
 
-      console.log(`[PURCHASE] ✅ Updated BBLIP balance from ${oldBalance} to ${newBblipBalance}`)
+      console.log(`[PURCHASE] ✅ Updated BBLIP balance: ${oldBalance} → ${newBblipBalance} (net: +${tokenQuantity - NETWORK_FEE_BBLIP})`)
       
       // Verify the update actually worked
       const { data: verifyBblip } = await supabase
@@ -247,49 +398,53 @@ export async function POST(request: NextRequest) {
         .single()
       
       console.log(`[PURCHASE] 🔍 VERIFICATION - Database now shows: ${verifyBblip?.balance}`)
-    } else {
-      // Create new BBLIP balance record
-      const { error: bblipError } = await supabase
-        .from('user_balances')
-        .insert({
-          user_id: userId,
-          wallet_address: address,
-          token_symbol: 'BBLIP',
-          network: 'BSC_MAINNET',
-          balance: tokenQuantity.toString()
-        })
-
-      if (bblipError) {
-        console.error(`[PURCHASE] ❌ Failed to create BBLIP balance:`, bblipError)
-        throw new Error('Failed to create BBLIP balance')
-      }
-
-      console.log(`[PURCHASE] ✅ Created new BBLIP balance: ${tokenQuantity}`)
+        } else {
+          // This should not happen since we verified BBLIP balance exists earlier
+      console.error(`[PURCHASE] ❌ CRITICAL ERROR: BBLIP balance disappeared during transaction`)
+      throw new Error('BBLIP balance not found during processing')
     }
 
-    // Record final virtual card transaction for BBLIP purchase
-    const { error: finalCardTxError } = await supabase
+    console.log(`[PURCHASE] ✅ All transactions recorded under Purchase ID: ${masterPurchaseId}`)
+
+    // 8. UPDATE VIRTUAL CARD TOTAL_SPENT AND LAST_USED_AT
+    console.log(`[PURCHASE] 💳 Updating virtual card total spent...`)
+    
+    // Calculate total spent from MASTER transactions only (not detail transactions)
+    // This prevents double counting since we create both master and detail transactions
+    const { data: masterTransactions, error: masterTxFetchError } = await supabase
       .from('virtual_card_transactions')
-      .insert({
-        card_id: cardId,
-        user_id: userId,
-        transaction_type: 'PURCHASE',
-        amount: totalUsdCost.toString(),
-        currency: 'USD',
-        merchant_name: 'BBLIP Presale',
-        merchant_category: 'CRYPTO',
-        description: `BBLIP Token Purchase: ${tokenQuantity.toLocaleString()} BBLIP tokens`,
-        status: 'COMPLETED'
-      })
+      .select('amount')
+      .eq('card_id', cardId)
+      .eq('status', 'COMPLETED')
+      .eq('transaction_type', 'PURCHASE')
+      .like('description', 'BBLIP Token Purchase:%') // Only master transactions have this pattern
 
-    if (finalCardTxError) {
-      console.error(`[PURCHASE] ❌ Failed to record final virtual card transaction:`, finalCardTxError)
-      throw new Error('Failed to record final virtual card transaction')
+    if (masterTxFetchError) {
+      console.error(`[PURCHASE] ❌ Failed to fetch master transactions:`, masterTxFetchError)
+      throw new Error('Failed to fetch master transactions')
     }
 
-    console.log(`[PURCHASE] ✅ Recorded final virtual card transaction: $${totalUsdCost} for ${tokenQuantity} BBLIP`)
+    // Calculate total from master transactions only
+    const calculatedTotalSpent = (masterTransactions || []).reduce((sum, tx) => sum + parseFloat(tx.amount), 0)
+    
+    // Update card with calculated total spent and last used date
+    const { error: cardUpdateError } = await supabase
+      .from('virtual_cards')
+      .update({
+        total_spent: calculatedTotalSpent,
+        last_used_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', cardId)
 
-    // 8. FINAL VERIFICATION
+    if (cardUpdateError) {
+      console.error(`[PURCHASE] ❌ Failed to update virtual card:`, cardUpdateError)
+      throw new Error('Failed to update virtual card')
+    }
+
+    console.log(`[PURCHASE] ✅ Updated virtual card total_spent to: $${calculatedTotalSpent.toFixed(2)} (from ${masterTransactions?.length || 0} master transactions)`)
+
+    // 9. FINAL VERIFICATION
     console.log(`[PURCHASE] 🔍 FINAL CHECK - Getting all user balances...`)
     const { data: finalBalances } = await supabase
       .from('user_balances')
@@ -298,7 +453,7 @@ export async function POST(request: NextRequest) {
     
     console.log(`[PURCHASE] 🔍 FINAL BALANCES:`, finalBalances?.map(b => `${b.token_symbol}: ${b.balance} (ID: ${b.id})`))
 
-    // 9. SUCCESS RESPONSE
+    // 10. SUCCESS RESPONSE
     console.log(`[PURCHASE] 🎉 Purchase completed successfully!`)
     console.log(`[PURCHASE] 📊 Summary: ${tokenQuantity} BBLIP for $${totalUsdCost}`)
 
@@ -306,13 +461,16 @@ export async function POST(request: NextRequest) {
       success: true,
       message: 'Purchase completed successfully',
       data: {
+        purchaseId: masterPurchaseId,
         transactionHash,
         tokenQuantity,
         totalUsdCost,
+        bnbPrice,
         paymentBreakdown: paymentPlan.map(p => ({
           asset: p.tokenSymbol,
           amount: p.requiredAmount,
-          usdValue: p.tokenSymbol === 'BNB' ? p.requiredAmount * bnbPrice : p.requiredAmount
+          tokenPrice: p.tokenPrice,
+          usdValue: p.requiredAmount * p.tokenPrice
         }))
       }
     })

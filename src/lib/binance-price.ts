@@ -19,22 +19,48 @@ const TOKEN_SYMBOL_MAP: Record<string, string> = {
   'bsc_LINK': 'LINKUSDT',
   'bsc_UNI': 'UNIUSDT',
   'bsc_AAVE': 'AAVEUSDT',
+  'bsc_ETH': 'ETHUSDT', // Binance-Peg Ethereum Token
   
-  // BSC specific tokens
-  'BSC-USD': 'USDTUSDT', // Binance-Peg BSC-USD is actually USDT
-  'Binance-Peg BSC-USD': 'USDTUSDT',
+  // BSC specific tokens and Binance-Peg tokens
+  'BSC-USD': 'BUSDUSDT', // BSC-USD stays as BSC-USD, priced like BUSD
+  'Binance-Peg BSC-USD': 'BUSDUSDT',
+  'Binance-Peg Ethereum Token': 'ETHUSDT',
+  'Binance-Peg BUSD Token': 'BUSDUSDT',
+  'Binance-Peg USD Coin': 'USDCUSDT',
+  'Binance-Peg Cardano Token': 'ADAUSDT',
+  'Binance-Peg Polkadot Token': 'DOTUSDT',
+  'Binance-Peg ChainLink Token': 'LINKUSDT',
+  'Binance-Peg Uniswap': 'UNIUSDT',
+  'Binance-Peg Aave Token': 'AAVEUSDT',
+  'Binance-Peg Bitcoin': 'BTCUSDT',
+  'Binance-Peg Bitcoin Cash': 'BCHUSDT',
+  'Binance-Peg Litecoin': 'LTCUSDT',
+  'Binance-Peg Dogecoin': 'DOGEUSDT',
+  'Binance-Peg Polygon': 'POLUSDT', // MATIC migrated to POL
+  'Binance-Peg Avalanche': 'AVAXUSDT',
+  'Binance-Peg Solana': 'SOLUSDT',
+  'Binance-Peg XRP Token': 'XRPUSDT',
   
-  // Common tokens
+  // Common token symbols (both full names and short names)
   'BTC': 'BTCUSDT',
+  'BTCB': 'BTCUSDT', // Bitcoin BEP20
+  'BCH': 'BCHUSDT', // Bitcoin Cash
   'ETH': 'ETHUSDT',
   'BNB': 'BNBUSDT',
   'ADA': 'ADAUSDT',
   'SOL': 'SOLUSDT',
-  'MATIC': 'MATICUSDT',
+  'MATIC': 'POLUSDT', // MATIC migrated to POL in September 2024
   'AVAX': 'AVAXUSDT',
-  'ATOM': 'ATOMUSDT',
-  'NEAR': 'NEARUSDT',
-  'FTM': 'FTMUSDT'
+  'LTC': 'LTCUSDT',
+  'DOGE': 'DOGEUSDT',
+  'XRP': 'XRPUSDT',
+  'SHIB': 'SHIBUSDT',
+  'DOT': 'DOTUSDT',
+  'LINK': 'LINKUSDT',
+  'UNI': 'UNIUSDT',
+  'AAVE': 'AAVEUSDT',
+  'USDC': 'USDCUSDT',
+  'BUSD': 'BUSDUSDT'
 }
 
 // Cache for price data (5 minutes)
@@ -68,6 +94,11 @@ export function getNativeCurrencySymbol(network: keyof typeof NETWORKS): string 
  * Get Binance trading pair symbol for a token
  */
 function getBinanceSymbol(tokenSymbol: string, network: keyof typeof NETWORKS): string {
+  // Special case: if tokenSymbol already ends with USDT, return as is
+  if (tokenSymbol.toUpperCase().endsWith('USDT')) {
+    return tokenSymbol.toUpperCase()
+  }
+  
   // Try network-specific mapping first
   const networkKey = `${network.toLowerCase()}_${tokenSymbol}`
   if (TOKEN_SYMBOL_MAP[networkKey]) {

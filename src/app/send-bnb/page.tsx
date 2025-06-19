@@ -53,20 +53,20 @@ function SendBNBContent() {
     
     setIsLoadingBalance(true)
     try {
-      // Fetch real blockchain balance, not database balance
-      const response = await fetch(`/api/get-blockchain-balance?address=${address}`)
+      // Fetch user BNB balance from database (user_balances table)
+      const response = await fetch(`/api/get-user-balances?address=${address}&tokenSymbol=BNB`)
       const data = await response.json()
       
       if (data.success && data.balance) {
         setUserBalance(data.balance)
-        console.log('Blockchain BNB balance:', data.balance)
+        console.log('Database BNB balance:', data.balance)
       } else {
         setUserBalance('0')
-        console.warn('Could not fetch blockchain balance:', data.error)
+        console.warn('Could not fetch user balance:', data.error || data.message)
       }
     } catch (error) {
-      console.error('Error fetching blockchain balance:', error)
-      setError('Failed to fetch blockchain balance')
+      console.error('Error fetching user balance:', error)
+      setError('Failed to fetch user balance')
       setUserBalance('0')
     } finally {
       setIsLoadingBalance(false)
@@ -75,7 +75,7 @@ function SendBNBContent() {
 
   const fetchBNBPrice = async () => {
     try {
-      const response = await fetch('/api/get-binance-price?symbol=BNBUSDT')
+      const response = await fetch('/api/get-binance-price?symbol=BNB')
       const data = await response.json()
       setBnbPrice(data.price || 0)
     } catch (error) {
@@ -158,10 +158,10 @@ function SendBNBContent() {
       setTransactionHash(data.transactionHash)
       setStep('success')
       
-      // Refresh blockchain balance after successful transaction
+      // Refresh database balance after successful transaction
       setTimeout(() => {
-        fetchUserBalance() // This will fetch from blockchain now
-      }, 3000) // Wait a bit longer for blockchain confirmation
+        fetchUserBalance() // This will fetch from database now
+      }, 1000) // Shorter wait since we're using database
 
     } catch (error) {
       console.error('Transaction error:', error)
@@ -170,11 +170,66 @@ function SendBNBContent() {
     }
   }
 
-  const handleMaxAmount = () => {
-    // Reserve more realistic gas fee for BSC (approximately 0.0002-0.0005 BNB for simple transfer)
+  // Calculate maximum sendable amount (balance - gas reserve)
+  const getMaxSendableAmount = () => {
     const gasReserve = 0.0005 // Reserve 0.0005 BNB for gas fees
-    const maxAmount = Math.max(0, parseFloat(userBalance) - gasReserve)
+    return Math.max(0, parseFloat(userBalance) - gasReserve)
+  }
+
+  const handleMaxAmount = () => {
+    const maxAmount = getMaxSendableAmount()
     setAmount(maxAmount.toFixed(6))
+    
+    // Show informative message about gas reserve
+    setError(`💡 MAX amount set to ${maxAmount.toFixed(6)} BNB. We automatically reserve 0.0005 BNB for gas fees to ensure your transaction completes successfully on the BSC blockchain.`)
+    
+    // Clear the info message after 4 seconds
+    setTimeout(() => {
+      if (error.includes('MAX amount set')) {
+        setError('')
+      }
+    }, 4000)
+  }
+
+  // Validate amount input to not exceed max sendable amount
+  const handleAmountChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const inputValue = e.target.value
+    const maxSendable = getMaxSendableAmount()
+    
+    // If input is empty, allow it
+    if (inputValue === '') {
+      setAmount('')
+      return
+    }
+    
+    const numericValue = parseFloat(inputValue)
+    
+    // If it's not a valid number, don't update
+    if (isNaN(numericValue)) {
+      return
+    }
+    
+    // If it exceeds max sendable amount, set to max and show warning
+    if (numericValue > maxSendable) {
+      setAmount(maxSendable.toFixed(6))
+      setError(`⚠️ Maximum sendable amount is ${maxSendable.toFixed(6)} BNB. We reserve 0.0005 BNB for transaction gas fees to ensure your transaction can be processed successfully on the BSC network.`)
+      
+      // Clear error after 5 seconds
+      setTimeout(() => {
+        if (error.includes('Maximum sendable amount')) {
+          setError('')
+        }
+      }, 5000)
+      return
+    }
+    
+    // Clear any previous max amount error when user enters valid amount
+    if (error.includes('Maximum sendable amount')) {
+      setError('')
+    }
+    
+    // Otherwise, allow the input
+    setAmount(inputValue)
   }
 
   const resetForm = () => {
@@ -187,7 +242,7 @@ function SendBNBContent() {
   }
 
   const canProceed = recipientAddress && amount && isValidAddress && 
-                    parseFloat(amount) > 0 && parseFloat(amount) <= parseFloat(userBalance)
+                    parseFloat(amount) > 0 && parseFloat(amount) <= getMaxSendableAmount()
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-indigo-50 to-purple-100">
@@ -215,14 +270,14 @@ function SendBNBContent() {
                   <span className="text-white font-bold text-lg">BNB</span>
                 </div>
                 <div>
-                  <p className="text-sm text-gray-600">Blockchain Balance</p>
+                  <p className="text-sm text-gray-600">Database Balance</p>
                   <p className="text-xl font-bold text-gray-900">
                     {isLoadingBalance ? '...' : `${parseFloat(userBalance).toFixed(6)} BNB`}
                   </p>
                   <p className="text-sm text-gray-500">
                     ≈ ${(parseFloat(userBalance) * bnbPrice).toFixed(2)} USD
                   </p>
-                  <p className="text-xs text-blue-600 mt-1">Live from BSC Network</p>
+                  <p className="text-xs text-green-600 mt-1">From Database</p>
                 </div>
               </div>
             </div>
@@ -278,10 +333,10 @@ function SendBNBContent() {
                   <input
                     type="number"
                     value={amount}
-                    onChange={(e) => setAmount(e.target.value)}
+                    onChange={handleAmountChange}
                     placeholder="0.000000"
                     step="0.000001"
-                    max={userBalance}
+                    max={getMaxSendableAmount()}
                     className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
                   />
                   <button
@@ -291,17 +346,37 @@ function SendBNBContent() {
                     MAX
                   </button>
                 </div>
-                {amount && (
-                  <p className="text-sm text-gray-500">
-                    ≈ ${(parseFloat(amount || '0') * bnbPrice).toFixed(2)} USD
+                <div className="space-y-1">
+                  {amount && (
+                    <p className="text-sm text-gray-500">
+                      ≈ ${(parseFloat(amount || '0') * bnbPrice).toFixed(2)} USD
+                    </p>
+                  )}
+                  <p className="text-xs text-gray-400">
+                    Max sendable: {getMaxSendableAmount().toFixed(6)} BNB 
+                    <span className="text-gray-500"> • Gas reserve: 0.0005 BNB for transaction fees</span>
                   </p>
-                )}
+                </div>
               </div>
 
-              {/* Error Display */}
+              {/* Error/Info Display */}
               {error && (
-                <div className="bg-red-50 border border-red-200 rounded-xl p-4">
-                  <p className="text-red-800 text-sm">{error}</p>
+                <div className={`border rounded-xl p-4 ${
+                  error.includes('💡') || error.includes('MAX amount set') 
+                    ? 'bg-blue-50 border-blue-200' 
+                    : error.includes('⚠️') || error.includes('Maximum sendable')
+                    ? 'bg-yellow-50 border-yellow-200'
+                    : 'bg-red-50 border-red-200'
+                }`}>
+                  <p className={`text-sm ${
+                    error.includes('💡') || error.includes('MAX amount set')
+                      ? 'text-blue-800'
+                      : error.includes('⚠️') || error.includes('Maximum sendable')
+                      ? 'text-yellow-800'
+                      : 'text-red-800'
+                  }`}>
+                    {error}
+                  </p>
                 </div>
               )}
 

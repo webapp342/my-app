@@ -4,6 +4,7 @@ import { useSearchParams } from 'next/navigation'
 import { useState, useEffect, Suspense } from 'react'
 import Link from 'next/link'
 import { VirtualCard as VirtualCardType } from '@/lib/virtual-card'
+import TransactionPasswordModal from '@/components/TransactionPasswordModal'
 
 interface CheckoutData {
   userId: string
@@ -19,9 +20,9 @@ function CheckoutContent() {
   const [mounted, setMounted] = useState(false)
   const [virtualCard, setVirtualCard] = useState<VirtualCardType | null>(null)
   const [cardLoading, setCardLoading] = useState(false)
-  const [transactionPassword, setTransactionPassword] = useState('')
   const [processing, setProcessing] = useState(false)
   const [error, setError] = useState('')
+  const [showPasswordModal, setShowPasswordModal] = useState(false)
 
   // Parse checkout data from URL params
   const checkoutData: CheckoutData = {
@@ -63,25 +64,28 @@ function CheckoutContent() {
     fetchVirtualCard()
   }, [checkoutData.userId, mounted])
 
-  // Handle purchase completion
-  const handleProceed = async () => {
-    // Remove transaction password validation since API doesn't use it anymore
+  // Handle purchase button click - show modal
+  const handlePurchaseClick = () => {
     if (!virtualCard) {
       setError('No payment method available')
       return
     }
 
-    // Prevent double submission with multiple checks
     if (processing) {
-      console.log('[CHECKOUT] Transaction already in progress, ignoring duplicate request')
       return
     }
 
+    setError('')
+    setShowPasswordModal(true)
+  }
+
+  // Handle purchase completion after password verification
+  const handlePurchaseConfirm = async (transactionPassword: string) => {
     setProcessing(true)
     setError('')
 
     try {
-      console.log('[CHECKOUT] 🚀 Starting purchase request...')
+      console.log('[CHECKOUT] 🚀 Starting purchase request with verified password...')
       
       // Add small delay to prevent rapid double-clicks
       await new Promise(resolve => setTimeout(resolve, 100))
@@ -93,7 +97,7 @@ function CheckoutContent() {
         },
         body: JSON.stringify({
           ...checkoutData,
-          // Remove transactionPassword since API doesn't need it
+          transactionPassword, // Include verified password
           cardId: virtualCard?.id
         })
       })
@@ -103,6 +107,7 @@ function CheckoutContent() {
       console.log('[CHECKOUT] 📥 API Response:', { success: result.success, isDuplicate: result.isDuplicate })
 
       if (response.ok && result.success) {
+        setShowPasswordModal(false)
         if (result.isDuplicate) {
           console.log('[CHECKOUT] ⚠️ Duplicate transaction detected, redirecting...')
           alert('Transaction already processed!')
@@ -261,8 +266,23 @@ function CheckoutContent() {
             </div>
           </div>
           
+          {/* Network Fee Notice */}
+          <div className="bg-yellow-600 bg-opacity-30 rounded-lg p-3 mt-4 mb-3">
+            <div className="flex items-start">
+              <svg className="w-4 h-4 text-yellow-200 mt-0.5 mr-2 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+              </svg>
+              <div>
+                <p className="text-yellow-100 text-xs font-medium">Network Fee: 1 BBLIP</p>
+                <p className="text-yellow-200 text-xs mt-1">
+                  This fee will be deducted from your BBLIP balance
+                </p>
+              </div>
+            </div>
+          </div>
+
           {/* Payment Method Notice */}
-          <div className="bg-blue-600 bg-opacity-30 rounded-lg p-3 mt-4">
+          <div className="bg-blue-600 bg-opacity-30 rounded-lg p-3">
             <p className="text-blue-100 text-xs">
               <strong>Payment Method:</strong> Funds will be automatically deducted from your assets based on your spending priority settings.
             </p>
@@ -278,22 +298,7 @@ function CheckoutContent() {
           </div>
         </div>
 
-        {/* Old Transaction Password (hidden) */}
-        <div className="mb-6 hidden">
-          <label className="block text-white text-sm font-medium mb-2">
-            Transaction Password
-          </label>
-          <input
-            type="password"
-            value={transactionPassword}
-            onChange={(e) => setTransactionPassword(e.target.value)}
-            placeholder="Enter your transaction password"
-            className="w-full px-4 py-3 bg-white bg-opacity-10 border border-white border-opacity-20 rounded-lg text-white placeholder-white placeholder-opacity-50 focus:ring-2 focus:ring-orange-400 focus:border-transparent"
-          />
-          {error && (
-            <p className="text-red-400 text-sm mt-2">{error}</p>
-          )}
-        </div>
+
 
         {/* Error Message */}
         {error && (
@@ -304,7 +309,7 @@ function CheckoutContent() {
 
         {/* Proceed Button */}
         <button
-          onClick={handleProceed}
+          onClick={handlePurchaseClick}
           disabled={processing || !virtualCard}
           className="w-full bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 disabled:from-gray-600 disabled:to-gray-700 text-white font-bold py-4 px-6 rounded-2xl transition duration-200 disabled:cursor-not-allowed text-lg"
           style={{ pointerEvents: processing ? 'none' : 'auto' }} // Extra protection against double clicks
@@ -329,6 +334,15 @@ function CheckoutContent() {
           </Link>
         </div>
       </div>
+
+      {/* Transaction Password Modal */}
+      <TransactionPasswordModal
+        isOpen={showPasswordModal}
+        onClose={() => setShowPasswordModal(false)}
+        onConfirm={handlePurchaseConfirm}
+        loading={processing}
+        error={error}
+      />
     </div>
   )
 }

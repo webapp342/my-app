@@ -33,20 +33,9 @@ export async function POST(request: NextRequest) {
     })
 
     // Get user's private key from wallets table (only for wallet access, no transaction logging)
-    console.log('Looking for wallet address:', fromAddress)
-    
-    // First, let's try to find any wallet for debugging
-    const { data: allWallets } = await supabase
-      .from('wallets')
-      .select('address, private_key_encrypted')
-      .limit(10)
-    
-    console.log('Available wallets:', allWallets)
-    
-    // Now search for the specific wallet (case-insensitive)
     const { data: wallet, error: walletError } = await supabase
       .from('wallets')
-      .select('private_key_encrypted, address')
+      .select('private_key_encrypted')
       .ilike('address', fromAddress)
       .single()
 
@@ -147,7 +136,59 @@ export async function POST(request: NextRequest) {
       const receipt = await txResponse.wait(1) // Wait for 1 confirmation
       console.log('Transaction confirmed:', receipt?.hash)
       
-      // Note: We don't save to database as requested - this page only handles blockchain operations
+      // Update user balance in database after successful transaction
+      try {
+        const actualGasUsed = receipt?.gasUsed || gasLimitBN
+        const actualGasCost = actualGasUsed * gasPriceBN
+        const totalDeducted = amountWei + actualGasCost
+        const totalDeductedBNB = ethers.formatEther(totalDeducted)
+        
+        console.log('Updating user balance after transaction:', {
+          address: fromAddress,
+          amountSent: ethers.formatEther(amountWei),
+          gasCost: ethers.formatEther(actualGasCost),
+          totalDeducted: totalDeductedBNB
+        })
+        
+        // Get current balance from database
+        const { data: currentBalance, error: balanceError } = await supabase
+          .from('user_balances')
+          .select('balance')
+          .eq('wallet_address', fromAddress)
+          .eq('token_symbol', 'BNB')
+          .eq('network', 'BSC_MAINNET')
+          .single()
+        
+        if (balanceError || !currentBalance) {
+          console.warn('Could not fetch current balance for update:', balanceError)
+        } else {
+          const newBalance = Math.max(0, parseFloat(currentBalance.balance) - parseFloat(totalDeductedBNB))
+          
+          // Update balance in database
+          const { error: updateError } = await supabase
+            .from('user_balances')
+            .update({ 
+              balance: newBalance,
+              last_updated: new Date().toISOString()
+            })
+            .eq('wallet_address', fromAddress)
+            .eq('token_symbol', 'BNB')
+            .eq('network', 'BSC_MAINNET')
+          
+          if (updateError) {
+            console.error('Failed to update user balance:', updateError)
+          } else {
+            console.log('Successfully updated user balance:', {
+              oldBalance: currentBalance.balance,
+              newBalance: newBalance,
+              deducted: totalDeductedBNB
+            })
+          }
+        }
+      } catch (balanceUpdateError) {
+        console.error('Error updating user balance:', balanceUpdateError)
+        // Don't fail the transaction response because of balance update error
+      }
 
       return NextResponse.json({
         success: true,
@@ -159,6 +200,46 @@ export async function POST(request: NextRequest) {
 
     } catch (confirmError) {
       console.error('Transaction confirmation failed:', confirmError)
+      
+      // Transaction might still be pending, but we should still update balance
+      // because the transaction was sent to blockchain
+      try {
+        const totalDeducted = amountWei + gasCost
+        const totalDeductedBNB = ethers.formatEther(totalDeducted)
+        
+        console.log('Updating user balance for pending transaction:', {
+          address: fromAddress,
+          totalDeducted: totalDeductedBNB
+        })
+        
+        // Get current balance from database
+        const { data: currentBalance, error: balanceError } = await supabase
+          .from('user_balances')
+          .select('balance')
+          .eq('wallet_address', fromAddress)
+          .eq('token_symbol', 'BNB')
+          .eq('network', 'BSC_MAINNET')
+          .single()
+        
+        if (!balanceError && currentBalance) {
+          const newBalance = Math.max(0, parseFloat(currentBalance.balance) - parseFloat(totalDeductedBNB))
+          
+          // Update balance in database
+          await supabase
+            .from('user_balances')
+            .update({ 
+              balance: newBalance,
+              last_updated: new Date().toISOString()
+            })
+            .eq('wallet_address', fromAddress)
+            .eq('token_symbol', 'BNB')
+            .eq('network', 'BSC_MAINNET')
+          
+          console.log('Updated balance for pending transaction')
+        }
+      } catch (balanceUpdateError) {
+        console.error('Error updating balance for pending transaction:', balanceUpdateError)
+      }
       
       // Transaction might still be pending
       return NextResponse.json({
