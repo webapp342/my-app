@@ -44,7 +44,7 @@ CREATE TABLE public.users (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
   username character varying NOT NULL UNIQUE,
   created_at timestamp with time zone NOT NULL DEFAULT timezone('utc'::text, now()),
-  transaction_password character varying,
+  transaction_password character varying CHECK (transaction_password IS NULL OR length(transaction_password::text) = 6 AND transaction_password::text ~ '^[0-9]{6}$'::text),
   CONSTRAINT users_pkey PRIMARY KEY (id)
 );
 CREATE TABLE public.virtual_card_transactions (
@@ -63,9 +63,19 @@ CREATE TABLE public.virtual_card_transactions (
   purchase_id character varying,
   bnb_price_at_purchase numeric,
   metadata jsonb,
+  -- Asset tracking fields - hangi varlık kullanıldığı ve USD karşılığı
+  asset_symbol character varying, -- BNB, USDC, USDT vs. hangi varlık kullanıldı
+  asset_amount numeric, -- Kullanılan varlık miktarı (örn: 0.05 BNB)
+  asset_usd_value numeric, -- Kullanılan varlığın o anki USD değeri (örn: $30.50)
+  asset_price_per_unit numeric, -- Birim fiyat (örn: BNB = $610.00)
+  transaction_direction character varying CHECK (transaction_direction::text = ANY (ARRAY['TOKEN_IN'::character varying, 'TOKEN_OUT'::character varying]::text[])),
+  -- Ek checkout bilgileri
+  payment_method character varying, -- 'MULTI_ASSET' veya 'SINGLE_ASSET'
+  primary_asset_symbol character varying, -- Ana kullanılan varlık
+  assets_used jsonb, -- Birden fazla varlık kullanıldıysa detaylar
   CONSTRAINT virtual_card_transactions_pkey PRIMARY KEY (id),
-  CONSTRAINT virtual_card_transactions_card_id_fkey FOREIGN KEY (card_id) REFERENCES public.virtual_cards(id),
-  CONSTRAINT virtual_card_transactions_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id)
+  CONSTRAINT virtual_card_transactions_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id),
+  CONSTRAINT virtual_card_transactions_card_id_fkey FOREIGN KEY (card_id) REFERENCES public.virtual_cards(id)
 );
 CREATE TABLE public.virtual_cards (
   id uuid NOT NULL DEFAULT gen_random_uuid(),

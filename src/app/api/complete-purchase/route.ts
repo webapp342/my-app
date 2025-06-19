@@ -78,48 +78,6 @@ export async function POST(request: NextRequest) {
       `[PURCHASE] ✅ Transaction password verified for user ${userId}`
     );
 
-    // NETWORK FEE: Check BBLIP balance for 1 BBLIP network fee
-    const NETWORK_FEE_BBLIP = 1;
-    console.log(
-      `[PURCHASE] 🔍 Checking BBLIP balance for network fee: ${NETWORK_FEE_BBLIP} BBLIP`
-    );
-
-    const { data: bblipBalance, error: bblipError } = await supabase
-      .from('user_balances')
-      .select('balance')
-      .eq('user_id', userId)
-      .eq('token_symbol', 'BBLIP')
-      .single();
-
-    if (bblipError || !bblipBalance) {
-      console.log(`[PURCHASE] ❌ No BBLIP balance found for network fee`);
-      return NextResponse.json(
-        {
-          error: `Network fee required: ${NETWORK_FEE_BBLIP} BBLIP. You don't have any BBLIP tokens for network fees.`,
-        },
-        { status: 400 }
-      );
-    }
-
-    const currentBblipBalance = parseFloat(bblipBalance.balance);
-    console.log(`[PURCHASE] 💰 Current BBLIP balance: ${currentBblipBalance}`);
-
-    if (currentBblipBalance < NETWORK_FEE_BBLIP) {
-      console.log(
-        `[PURCHASE] ❌ Insufficient BBLIP for network fee: need ${NETWORK_FEE_BBLIP}, have ${currentBblipBalance}`
-      );
-      return NextResponse.json(
-        {
-          error: `Insufficient BBLIP for network fee. Need ${NETWORK_FEE_BBLIP} BBLIP, you have ${currentBblipBalance.toFixed(6)} BBLIP.`,
-        },
-        { status: 400 }
-      );
-    }
-
-    console.log(
-      `[PURCHASE] ✅ BBLIP network fee check passed: ${currentBblipBalance} >= ${NETWORK_FEE_BBLIP}`
-    );
-
     // Create unique purchase ID
     purchaseId = `${userId}-${tokenQuantity}-${Date.now()}`;
 
@@ -353,6 +311,10 @@ export async function POST(request: NextRequest) {
       `[PURCHASE] 🔄 Executing payment with transaction: ${transactionHash}, Purchase ID: ${masterPurchaseId}`
     );
 
+    // Determine payment method and primary asset
+    const paymentMethod = paymentPlan.length > 1 ? 'MULTI_ASSET' : 'SINGLE_ASSET';
+    const primaryAsset = paymentPlan.length > 0 ? paymentPlan[0] : null;
+
     // First, create master purchase transaction
     const { error: masterTxError } = await supabase
       .from('virtual_card_transactions')
@@ -368,6 +330,21 @@ export async function POST(request: NextRequest) {
         status: 'COMPLETED',
         purchase_id: masterPurchaseId,
         bnb_price_at_purchase: bnbPrice.toString(),
+        transaction_direction: 'TOKEN_IN', // BBLIP token'ları satın alıyoruz
+        // Asset tracking fields - BBLIP için
+        asset_symbol: 'BBLIP', // Satın alınan token
+        asset_amount: tokenQuantity, // Satın alınan miktar
+        asset_usd_value: totalUsdCost, // Toplam ödenen USD
+        asset_price_per_unit: totalUsdCost / tokenQuantity, // BBLIP birim fiyatı
+        // Payment method fields
+        payment_method: paymentMethod,
+        primary_asset_symbol: primaryAsset?.tokenSymbol, // Hangi asset ile ödeme yapıldı
+        assets_used: JSON.stringify(paymentPlan.map(p => ({
+          symbol: p.tokenSymbol,
+          amount: p.requiredAmount,
+          price: p.tokenPrice,
+          usdValue: p.requiredAmount * p.tokenPrice,
+        }))),
         metadata: JSON.stringify({
           tokenQuantity,
           totalUsdCost,
@@ -457,11 +434,29 @@ export async function POST(request: NextRequest) {
           status: 'COMPLETED',
           purchase_id: masterPurchaseId,
           bnb_price_at_purchase: bnbPrice.toString(),
+          transaction_direction: 'TOKEN_OUT', // Ödeme asset'i çıkıyor (BNB, BUSD vs.)
+          // Asset tracking fields - ödeme detayı
+          asset_symbol: payment.tokenSymbol, // Ödeme yapılan asset (BNB, BUSD vs.)
+          asset_amount: payment.requiredAmount, // Harcanan miktar
+          asset_usd_value: cardTxAmount, // USD karşılığı
+          asset_price_per_unit: payment.tokenPrice, // Asset birim fiyatı
+          // Payment method fields
+          payment_method: 'SINGLE_ASSET', // Her detay için tek asset
+          primary_asset_symbol: payment.tokenSymbol,
+          assets_used: JSON.stringify([{
+            symbol: payment.tokenSymbol,
+            amount: payment.requiredAmount,
+            price: payment.tokenPrice,
+            usdValue: cardTxAmount,
+          }]),
           metadata: JSON.stringify({
             tokenSymbol: payment.tokenSymbol,
             tokenAmount: payment.requiredAmount,
             tokenPrice: payment.tokenPrice,
             usdValue: cardTxAmount,
+            masterPurchaseId: masterPurchaseId,
+            purchaseStep: i + 1,
+            totalSteps: paymentPlan.length,
           }),
         });
 
@@ -478,12 +473,12 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // 7. DEDUCT NETWORK FEE AND ADD BBLIP TOKENS
+    // 7. ADD BBLIP TOKENS (NO NETWORK FEE)
     console.log(
-      `[PURCHASE] 💰 Processing BBLIP: Adding ${tokenQuantity} tokens and deducting ${NETWORK_FEE_BBLIP} network fee`
+      `[PURCHASE] 💰 Processing BBLIP: Adding ${tokenQuantity} tokens (no network fee)`
     );
 
-    // Get current BBLIP balance (we already verified it exists and is sufficient)
+    // Get current BBLIP balance or create new one
     const { data: existingBblip } = await supabase
       .from('user_balances')
       .select('*')
@@ -492,16 +487,13 @@ export async function POST(request: NextRequest) {
       .single();
 
     if (existingBblip) {
-      // Calculate new balance: current + purchased - network fee
+      // Add purchased tokens to existing balance
       const oldBalance = parseFloat(existingBblip.balance);
-      const newBblipBalance = oldBalance + tokenQuantity - NETWORK_FEE_BBLIP;
+      const newBblipBalance = oldBalance + tokenQuantity;
 
       console.log(`[PURCHASE] 🔍 BBLIP CALCULATION:`);
       console.log(`[PURCHASE] 🔍   Current: ${oldBalance}`);
       console.log(`[PURCHASE] 🔍   Adding: +${tokenQuantity} (purchased)`);
-      console.log(
-        `[PURCHASE] 🔍   Deducting: -${NETWORK_FEE_BBLIP} (network fee)`
-      );
       console.log(`[PURCHASE] 🔍   Final: ${newBblipBalance}`);
       console.log(`[PURCHASE] 🔍   Record ID: ${existingBblip.id}`);
 
@@ -522,7 +514,7 @@ export async function POST(request: NextRequest) {
       }
 
       console.log(
-        `[PURCHASE] ✅ Updated BBLIP balance: ${oldBalance} → ${newBblipBalance} (net: +${tokenQuantity - NETWORK_FEE_BBLIP})`
+        `[PURCHASE] ✅ Updated BBLIP balance: ${oldBalance} → ${newBblipBalance} (net: +${tokenQuantity})`
       );
 
       // Verify the update actually worked
@@ -536,11 +528,31 @@ export async function POST(request: NextRequest) {
         `[PURCHASE] 🔍 VERIFICATION - Database now shows: ${verifyBblip?.balance}`
       );
     } else {
-      // This should not happen since we verified BBLIP balance exists earlier
-      console.error(
-        `[PURCHASE] ❌ CRITICAL ERROR: BBLIP balance disappeared during transaction`
+      // Create new BBLIP balance record
+      console.log(`[PURCHASE] 🆕 Creating new BBLIP balance record`);
+
+      const { error: createError } = await supabase
+        .from('user_balances')
+        .insert({
+          user_id: userId,
+          wallet_address: 'presale', // Placeholder for presale tokens
+          token_symbol: 'BBLIP',
+          token_address: null,
+          network: 'BSC_MAINNET',
+          balance: tokenQuantity.toString(),
+        });
+
+      if (createError) {
+        console.error(
+          `[PURCHASE] ❌ Failed to create BBLIP balance:`,
+          createError
+        );
+        throw new Error('Failed to create BBLIP balance');
+      }
+
+      console.log(
+        `[PURCHASE] ✅ Created new BBLIP balance: ${tokenQuantity}`
       );
-      throw new Error('BBLIP balance not found during processing');
     }
 
     console.log(
