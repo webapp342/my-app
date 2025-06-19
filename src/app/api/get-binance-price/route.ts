@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { fetchTokenPrice } from '@/lib/binance-price';
 
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
     const symbol = searchParams.get('symbol');
+    const network = searchParams.get('network') || 'BSC_MAINNET';
 
     if (!symbol) {
       return NextResponse.json(
@@ -13,16 +13,36 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    console.log(`[BINANCE PRICE] Fetching price for ${symbol}`);
+    console.log(`[BINANCE PRICE] Fetching price for ${symbol} on ${network}`);
 
-    // Use our fetchTokenPrice function which handles symbol mapping
-    const price = await fetchTokenPrice(symbol, 'BSC_MAINNET');
+    // Use our proxy API to avoid CORS and 451 errors
+    const proxyUrl = new URL('/api/proxy-price', request.url);
+    proxyUrl.searchParams.set('symbol', symbol);
+    proxyUrl.searchParams.set('network', network);
 
-    console.log(`[BINANCE PRICE] ${symbol} price: $${price}`);
+    const response = await fetch(proxyUrl.toString(), {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    });
+
+    if (!response.ok) {
+      throw new Error(`Proxy API error: ${response.status}`);
+    }
+
+    const data = await response.json();
+
+    console.log(
+      `[BINANCE PRICE] ${symbol} price: $${data.price} (source: ${data.source})`
+    );
 
     return NextResponse.json({
       symbol: symbol,
-      price: price.toString(),
+      price: data.price.toString(),
+      source: data.source,
+      network: network,
+      timestamp: data.timestamp,
     });
   } catch (error) {
     console.error('[BINANCE PRICE] Error:', error);

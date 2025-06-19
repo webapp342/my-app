@@ -1,7 +1,19 @@
 import { NETWORKS } from './blockchain';
 
-// Binance API endpoint for 24hr price ticker
-const BINANCE_API_URL = 'https://api.binance.com/api/v3/ticker/24hr';
+// Multiple API endpoints for redundancy
+const API_ENDPOINTS = {
+  // Primary: Binance API
+  binance: 'https://api.binance.com/api/v3/ticker/24hr',
+
+  // Alternative: CoinGecko API (more reliable for Vercel)
+  coingecko: 'https://api.coingecko.com/api/v3/simple/price',
+
+  // Alternative: CryptoCompare API
+  cryptocompare: 'https://min-api.cryptocompare.com/data/price',
+
+  // Alternative: CoinCap API
+  coincap: 'https://api.coincap.io/v2/assets',
+};
 
 // Token symbol mapping for different networks
 const TOKEN_SYMBOL_MAP: Record<string, string> = {
@@ -63,6 +75,31 @@ const TOKEN_SYMBOL_MAP: Record<string, string> = {
   BUSD: 'BUSDUSDT',
 };
 
+// CoinGecko ID mapping
+const COINGECKO_ID_MAP: Record<string, string> = {
+  BTC: 'bitcoin',
+  ETH: 'ethereum',
+  BNB: 'binancecoin',
+  ADA: 'cardano',
+  SOL: 'solana',
+  MATIC: 'matic-network',
+  AVAX: 'avalanche-2',
+  LTC: 'litecoin',
+  DOGE: 'dogecoin',
+  XRP: 'ripple',
+  SHIB: 'shiba-inu',
+  DOT: 'polkadot',
+  LINK: 'chainlink',
+  UNI: 'uniswap',
+  AAVE: 'aave',
+  USDC: 'usd-coin',
+  BUSD: 'binance-usd',
+  USDT: 'tether',
+  CAKE: 'pancakeswap-token',
+  BCH: 'bitcoin-cash',
+  POL: 'matic-network', // Polygon
+};
+
 // Cache for price data (5 minutes)
 const priceCache: Map<string, { price: number; timestamp: number }> = new Map();
 const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
@@ -73,6 +110,12 @@ interface BinancePriceResponse {
   lastPrice?: string;
   priceChange: string;
   priceChangePercent: string;
+}
+
+interface CoinGeckoPriceResponse {
+  [key: string]: {
+    usd: number;
+  };
 }
 
 /**
@@ -120,7 +163,80 @@ function getBinanceSymbol(
 }
 
 /**
- * Fetch token price from Binance API
+ * Get CoinGecko ID for a token
+ */
+function getCoinGeckoId(tokenSymbol: string): string {
+  return (
+    COINGECKO_ID_MAP[tokenSymbol.toUpperCase()] || tokenSymbol.toLowerCase()
+  );
+}
+
+/**
+ * Fetch price from Binance API
+ */
+async function fetchFromBinance(binanceSymbol: string): Promise<number> {
+  const apiUrl = `${API_ENDPOINTS.binance}?symbol=${binanceSymbol}`;
+  console.log(`[PRICE DEBUG] Trying Binance API: ${apiUrl}`);
+
+  const response = await fetch(apiUrl, {
+    headers: {
+      'User-Agent': 'Mozilla/5.0 (compatible; WalletApp/1.0)',
+    },
+  });
+
+  if (!response.ok) {
+    throw new Error(`Binance API error: ${response.status}`);
+  }
+
+  const data: BinancePriceResponse = await response.json();
+  return parseFloat(data.lastPrice || data.price || '0');
+}
+
+/**
+ * Fetch price from CoinGecko API
+ */
+async function fetchFromCoinGecko(tokenSymbol: string): Promise<number> {
+  const coinId = getCoinGeckoId(tokenSymbol);
+  const apiUrl = `${API_ENDPOINTS.coingecko}?ids=${coinId}&vs_currencies=usd`;
+  console.log(`[PRICE DEBUG] Trying CoinGecko API: ${apiUrl}`);
+
+  const response = await fetch(apiUrl, {
+    headers: {
+      'User-Agent': 'Mozilla/5.0 (compatible; WalletApp/1.0)',
+    },
+  });
+
+  if (!response.ok) {
+    throw new Error(`CoinGecko API error: ${response.status}`);
+  }
+
+  const data: CoinGeckoPriceResponse = await response.json();
+  return data[coinId]?.usd || 0;
+}
+
+/**
+ * Fetch price from CryptoCompare API
+ */
+async function fetchFromCryptoCompare(tokenSymbol: string): Promise<number> {
+  const apiUrl = `${API_ENDPOINTS.cryptocompare}?fsym=${tokenSymbol.toUpperCase()}&tsyms=USD`;
+  console.log(`[PRICE DEBUG] Trying CryptoCompare API: ${apiUrl}`);
+
+  const response = await fetch(apiUrl, {
+    headers: {
+      'User-Agent': 'Mozilla/5.0 (compatible; WalletApp/1.0)',
+    },
+  });
+
+  if (!response.ok) {
+    throw new Error(`CryptoCompare API error: ${response.status}`);
+  }
+
+  const data = await response.json();
+  return data.USD || 0;
+}
+
+/**
+ * Fetch token price with fallback APIs
  */
 export async function fetchTokenPrice(
   tokenSymbol: string,
@@ -156,30 +272,34 @@ export async function fetchTokenPrice(
       return price;
     }
 
-    const apiUrl = `${BINANCE_API_URL}?symbol=${binanceSymbol}`;
-    console.log(`[PRICE DEBUG] Making Binance API call: ${apiUrl}`);
+    // Try multiple APIs in order of preference
+    const apis = [
+      { name: 'Binance', fn: () => fetchFromBinance(binanceSymbol) },
+      { name: 'CoinGecko', fn: () => fetchFromCoinGecko(tokenSymbol) },
+      { name: 'CryptoCompare', fn: () => fetchFromCryptoCompare(tokenSymbol) },
+    ];
 
-    const response = await fetch(apiUrl);
-    console.log(`[PRICE DEBUG] API Response status: ${response.status}`);
+    let lastError: Error | null = null;
 
-    if (!response.ok) {
-      console.error(
-        `[PRICE DEBUG] Binance API error: ${response.status} ${response.statusText}`
-      );
-      throw new Error(`Binance API error: ${response.status}`);
+    for (const api of apis) {
+      try {
+        console.log(`[PRICE DEBUG] Trying ${api.name} API...`);
+        const price = await api.fn();
+
+        if (price > 0) {
+          console.log(`[PRICE DEBUG] Success with ${api.name}: $${price}`);
+          priceCache.set(binanceSymbol, { price, timestamp: Date.now() });
+          return price;
+        }
+      } catch (error) {
+        console.log(`[PRICE DEBUG] ${api.name} failed:`, error);
+        lastError = error as Error;
+        continue;
+      }
     }
 
-    const data: BinancePriceResponse = await response.json();
-    console.log(`[PRICE DEBUG] API Response data:`, data);
-
-    // Binance 24hr ticker API uses 'lastPrice' field, not 'price'
-    const price = parseFloat(data.lastPrice || data.price || '0');
-    console.log(`[PRICE DEBUG] Parsed price for ${binanceSymbol}: $${price}`);
-
-    // Cache the result
-    priceCache.set(binanceSymbol, { price, timestamp: Date.now() });
-
-    return price;
+    // All APIs failed
+    throw lastError || new Error('All price APIs failed');
   } catch (error) {
     console.error(
       `[PRICE DEBUG] Error fetching price for ${tokenSymbol}:`,
