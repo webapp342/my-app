@@ -1,0 +1,125 @@
+{
+  "recommendations": [
+    // Cursor AI eklentileri
+    "cursor.cursor",
+    // TypeScript ve JavaScript
+    "ms-vscode.vscode-typescript-next",
+    "bradlc.vscode-tailwindcss",
+    // React ve Next.js
+    "ms-vscode.vscode-react-native",
+    "formulahendry.auto-rename-tag",
+    "christian-kohler.path-intellisense",
+    // Code Quality
+    "dbaeumer.vscode-eslint",
+    "esbenp.prettier-vscode",
+    "ms-vscode.vscode-json",
+    // Git
+    "eamodio.gitlens",
+    "mhutchie.git-graph",
+    // Productivity
+    "ms-vscode.vscode-json",
+    "redhat.vscode-yaml",
+    "ms-vscode.vscode-markdown",
+    // Error handling
+    "usernamehw.errorlens",
+    // Icons
+    "pkief.material-icon-theme",
+    // Auto imports
+    "steoates.autoimport",
+    // Bracket pair colorizer
+    "coenraads.bracket-pair-colorizer-2",
+    // Indent guides
+    "nhoizey.gremlins",
+    // Code spell checker
+    "streetsidesoftware.code-spell-checker",
+    // Import cost
+    "wix.vscode-import-cost",
+    // Better comments
+    "aaron-bond.better-comments",
+    // Git history
+    "donjayamanne.githistory",
+    // REST Client
+    "humao.rest-client",
+    // Thunder Client (API testing)
+    "rangav.vscode-thunder-client",
+    // Database
+    "mtxr.sqltools",
+    "mtxr.sqltools-driver-pg",
+    // Docker
+    "ms-azuretools.vscode-docker",
+    // Environment variables
+    "mikestead.dotenv",
+    // Color highlight
+    "naumovs.color-highlight",
+    // Indent rainbow
+    "oderwat.indent-rainbow",
+    // Todo highlight
+    "wayou.vscode-todo-highlight",
+    // Bookmarks
+    "alefragnani.bookmarks",
+    // Project manager
+    "alefragnani.project-manager",
+    // Auto close tag
+    "formulahendry.auto-close-tag",
+    // Highlight matching tag
+    "vincaslt.highlight-matching-tag",
+    // CSS peek
+    "pranaygp.vscode-css-peek",
+    // HTML CSS support
+    "ecmel.vscode-html-css-support",
+    // IntelliSense for CSS class names
+    "zignd.html-css-class-completion",
+    // Live server (development)
+    "ritwickdey.liveserver",
+    // Prettier formatter
+    "esbenp.prettier-vscode",
+    // Sort lines
+    "tyriar.sort-lines",
+    // Duplicate action
+    "mrmlnc.vscode-duplicate",
+    // Change case
+    "wmaurer.change-case",
+    // Quokka.js (live JavaScript playground)
+    "wallabyjs.quokka-vscode",
+    // Code metrics
+    "kisstkondoros.vscode-codemetrics",
+    // Git blame
+    "waderyan.gitblame",
+    // Git graph
+    "mhutchie.git-graph",
+    // Git history diff
+    "huibizhang.git-history-diff",
+    // Git lens
+    "eamodio.gitlens",
+    // Git rebase
+    "mhutchie.git-rebase",
+    // Git stash
+    "mhutchie.git-stash",
+    // Git status
+    "mhutchie.git-status",
+    // Git tree compare
+    "mhutchie.git-tree-compare",
+    // Git tree view
+    "mhutchie.git-tree-view",
+    // Git tree view (legacy)
+    "mhutchie.git-tree-view-legacy",
+    // Git tree view (new)
+    "mhutchie.git-tree-view-new",
+    // Git tree view (old)
+    "mhutchie.git-tree-view-old",
+    // Git tree view (stable)
+    "mhutchie.git-tree-view-stable",
+    // Git tree view (unstable)
+    "mhutchie.git-tree-view-unstable",
+    // Git tree view (v1)
+    "mhutchie.git-tree-view-v1",
+    // Git tree view (v2)
+    "mhutchie.git-tree-view-v2",
+    // Git tree view (v3)
+    "mhutchie.git-tree-view-v3",
+    // Git tree view (v4)
+    "mhutchie.git-tree-view-v4",
+    // Git tree view (v5)
+    "mhutchie.git-tree-view-v5"
+  ]
+}

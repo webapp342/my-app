@@ -1,0 +1,160 @@
+# Cursor AI Proje Kuralları ve Öğrenme Rehberi
+
+## Proje Yapısı ve Mimari
+Bu proje bir Next.js 14 wallet uygulamasıdır. Aşağıdaki yapıyı takip eder:
+
+### Klasör Yapısı:
+- `src/app/` - Next.js App Router sayfaları
+- `src/components/` - Yeniden kullanılabilir React bileşenleri
+- `src/lib/` - Utility fonksiyonları ve servisler
+- `src/hooks/` - Custom React hooks
+- `src/types/` - TypeScript tip tanımları
+- `src/app/api/` - API route'ları
+
+### Teknoloji Stack:
+- Next.js 14 (App Router)
+- TypeScript
+- Tailwind CSS
+- Supabase (veritabanı)
+- Web3.js/Ethers.js (blockchain)
+- ESLint + Prettier
+
+## Kod Stili ve Konvansiyonlar
+
+### TypeScript:
+- Strict mode kullan
+- Interface'ler için `I` prefix'i kullanma
+- Type alias'lar için PascalCase kullan
+- Generic'ler için açıklayıcı isimler kullan
+
+### React/Next.js:
+- Functional components kullan
+- Hooks için camelCase isimlendirme
+- Props interface'lerini component ile aynı dosyada tanımla
+- Server components varsayılan, client components için "use client" kullan
+
+### API Routes:
+- RESTful endpoint'ler kullan
+- Error handling için try-catch blokları
+- Response format: `{ success: boolean, data?: any, error?: string }`
+
+### Styling:
+- Tailwind CSS utility classes kullan
+- Custom CSS sadece gerekli olduğunda
+- Responsive design için Tailwind breakpoint'leri
+
+## Blockchain ve Wallet Özellikleri
+
+### Wallet İşlemleri:
+- BSC (Binance Smart Chain) ağını destekle
+- MetaMask entegrasyonu
+- Transaction signing ve broadcasting
+- Gas estimation
+
+### Güvenlik:
+- Private key'leri asla client-side'da saklama
+- Environment variables kullan
+- Input validation her zaman yap
+
+## Veritabanı (Supabase):
+- PostgreSQL kullan
+- Row Level Security (RLS) aktif
+- Real-time subscriptions kullan
+- Migration'ları dikkatli yönet
+
+## Performans Optimizasyonları:
+- Image optimization için Next.js Image component
+- Code splitting ve lazy loading
+- Memoization gerektiğinde kullan
+- Bundle size'ı minimize et
+
+## Error Handling:
+- Global error boundary kullan
+- User-friendly error mesajları
+- Logging için console.error kullan
+- API error'ları için proper HTTP status codes
+
+## Testing:
+- Unit testler için Jest
+- Component testleri için React Testing Library
+- E2E testler için Playwright (opsiyonel)
+
+## Git Workflow:
+- Feature branch'ler kullan
+- Conventional commits
+- Pull request'lerde code review
+- Semantic versioning
+
+## AI Asistan Kuralları:
+- Kod önerilerinde bu kuralları takip et
+- Mevcut kod stilini koru
+- Performance ve security'yi öncelikle
+- Accessibility standartlarını gözet
+- Modern React patterns kullan
+
+## OTOMATIK KALİTE KONTROLÜ VE ÖZET SİSTEMİ:
+
+### Her Yanıt Sonrası Zorunlu İşlemler:
+1. **TypeScript Kontrolü**: `npx tsc --noEmit` çalıştır
+2. **ESLint Kontrolü**: `npm run lint` çalıştır
+3. **Prettier Kontrolü**: `npx prettier --check .` çalıştır
+4. **Otomatik Düzeltme**: Hatalar varsa otomatik düzelt
+5. **Tekrar Kontrol**: Tüm hatalar düzelene kadar tekrarla (max 5 deneme)
+
+### Özet Formatı:
+Her yanıt sonunda aşağıdaki özeti ver:
+
+```
+## 📋 İŞLEM ÖZETİ
+
+### ✅ Tamamlanan İşlemler:
+- [Yapılan işlem 1]
+- [Yapılan işlem 2]
+- [Yapılan işlem 3]
+
+### 🔧 Kalite Kontrolü:
+- TypeScript: ✅/❌ (Hata sayısı)
+- ESLint: ✅/❌ (Hata sayısı)
+- Prettier: ✅/❌ (Hata sayısı)
+- Otomatik Düzeltmeler: [Düzeltilen hata sayısı]
+
+### 📁 Değiştirilen Dosyalar:
+- `dosya1.tsx` - [Açıklama]
+- `dosya2.ts` - [Açıklama]
+
+### 🚀 Sonraki Adımlar:
+- [Önerilen sonraki işlem 1]
+- [Önerilen sonraki işlem 2]
+
+### ⚠️ Dikkat Edilecekler:
+- [Varsa uyarılar veya önemli notlar]
+```
+
+### Kalite Kontrol Komutları:
+```bash
+# TypeScript kontrolü
+npx tsc --noEmit
+
+# ESLint kontrolü
+npm run lint
+
+# Prettier kontrolü
+npx prettier --check .
+
+# Otomatik düzeltme
+npx prettier --write .
+npx eslint --fix .
+```
+
+### Hata Durumunda:
+- Hataları detaylı göster
+- Otomatik düzeltme dene
+- Düzeltme sonrası tekrar kontrol et
+- 5 deneme sonunda hala hata varsa kullanıcıya bildir
+
+## Özel Notlar:
+- Bu bir crypto wallet uygulaması, güvenlik kritik
+- User experience'ı öncelikle
+- Mobile-first responsive design
+- Internationalization (i18n) hazırlığı
+- PWA özellikleri eklenebilir 

@@ -1,0 +1,179 @@
+{
+  // ===== TEMEL PERFORMANS AYARLARI =====
+  "files.watcherExclude": {
+    "**/node_modules/**": true,
+    "**/dist/**": true,
+    "**/build/**": true,
+    "**/.next/**": true,
+    "**/.git/**": true,
+    "**/coverage/**": true,
+    "**/.vercel/**": true
+  },
+  "search.exclude": {
+    "**/node_modules": true,
+    "**/bower_components": true,
+    "**/*.code-search": true,
+    "**/dist": true,
+    "**/build": true,
+    "**/.next": true,
+    "**/package-lock.json": true
+  },
+  // ===== CURSOR AI ÖĞRENME VE HAFIZA AYARLARI =====
+  "cursor.chat.maxTokens": 8000,
+  "cursor.chat.temperature": 0.7,
+  "cursor.chat.model": "gpt-4",
+  // AI kod tamamlama ve öğrenme
+  "cursor.completion.enabled": true,
+  "cursor.completion.triggerMode": "automatic",
+  "cursor.completion.snippetsEnabled": true,
+  // Proje hafızası ve öğrenme
+  "cursor.projectMemory.enabled": true,
+  "cursor.projectMemory.maxFiles": 1000,
+  "cursor.projectMemory.includePatterns": [
+    "**/*.ts",
+    "**/*.tsx",
+    "**/*.js",
+    "**/*.jsx",
+    "**/*.json",
+    "**/*.md"
+  ],
+  "cursor.projectMemory.excludePatterns": [
+    "**/node_modules/**",
+    "**/.next/**",
+    "**/dist/**",
+    "**/build/**"
+  ],
+  // AI kod analizi ve öneriler
+  "cursor.codeAnalysis.enabled": true,
+  "cursor.codeAnalysis.autoFix": true,
+  "cursor.codeAnalysis.suggestRefactoring": true,
+  // ===== OTOMATIK KOD KALİTE KONTROLÜ =====
+  "cursor.autoQualityCheck.enabled": true,
+  "cursor.autoQualityCheck.commands": ["npx tsc --noEmit", "npm run lint"],
+  "cursor.autoQualityCheck.maxRetries": 5,
+  "cursor.autoQualityCheck.retryDelay": 2000,
+  "cursor.autoQualityCheck.showProgress": true,
+  "cursor.autoQualityCheck.autoFix": true,
+  // TypeScript otomatik kontrol
+  "typescript.preferences.includePackageJsonAutoImports": "auto",
+  "typescript.suggest.autoImports": true,
+  "typescript.updateImportsOnFileMove.enabled": "always",
+  "typescript.preferences.importModuleSpecifier": "relative",
+  "typescript.suggest.paths": true,
+  "typescript.validate.enable": true,
+  "typescript.reportStyleChecksAsWarnings": true,
+  // TypeScript performans
+  "typescript.tsserver.maxTsServerMemory": 3072,
+  "typescript.tsserver.watchOptions": {
+    "watchFile": "useFsEventsOnParentDirectory",
+    "watchDirectory": "useFsEvents",
+    "fallbackPolling": "dynamicPriorityPolling"
+  },
+  // ===== REACT/NEXT.JS ÖZEL AYARLARI =====
+  "emmet.includeLanguages": {
+    "typescript": "html",
+    "typescriptreact": "html"
+  },
+  "emmet.triggerExpansionOnTab": true,
+  "emmet.showAbbreviationSuggestions": true,
+  // ===== TAILWIND CSS DESTEĞİ =====
+  "tailwindCSS.includeLanguages": {
+    "typescript": "javascript",
+    "typescriptreact": "javascript"
+  },
+  "tailwindCSS.experimental.classRegex": [
+    ["cva\\(([^)]*)\\)", "[\"'`]([^\"'`]*).*?[\"'`]"],
+    ["cx\\(([^)]*)\\)", "(?:'|\"|`)([^']*)(?:'|\"|`)"]
+  ],
+  // ===== ESLINT VE KOD KALİTESİ =====
+  "eslint.validate": [
+    "javascript",
+    "javascriptreact",
+    "typescript",
+    "typescriptreact"
+  ],
+  "eslint.workingDirectories": ["."],
+  "eslint.format.enable": true,
+  "eslint.autoFixOnSave": true,
+  "eslint.run": "onType",
+  // ===== PRETTIER AYARLARI =====
+  "prettier.enable": true,
+  "prettier.requireConfig": true,
+  "prettier.useEditorConfig": true,
+  // ===== EDITOR PERFORMANS AYARLARI =====
+  "editor.quickSuggestions": {
+    "other": true,
+    "comments": false,
+    "strings": false
+  },
+  "editor.suggestOnTriggerCharacters": true,
+  "editor.acceptSuggestionOnCommitCharacter": true,
+  "editor.suggestSelection": "first",
+  "editor.tabCompletion": "on",
+  // Otomatik kaydetme
+  "files.autoSave": "afterDelay",
+  "files.autoSaveDelay": 1000,
+  // Format ayarları
+  "editor.formatOnSave": true,
+  "editor.formatOnPaste": true,
+  "editor.formatOnType": true,
+  // Bellek optimizasyonu
+  "files.maxMemoryForLargeFilesMB": 8192,
+  // ===== GIT PERFORMANSI =====
+  "git.autorefresh": false,
+  "git.autofetch": false,
+  "git.enableSmartCommit": true,
+  "git.confirmSync": false,
+  // ===== TERMINAL OPTİMİZASYONU =====
+  "terminal.integrated.gpuAcceleration": "on",
+  "terminal.integrated.defaultProfile.windows": "PowerShell",
+  "terminal.integrated.fontSize": 14,
+  // ===== DOSYA GEZGİNİ AYARLARI =====
+  "explorer.compactFolders": false,
+  "explorer.incrementalNaming": "smart",
+  "explorer.confirmDelete": false,
+  "explorer.confirmDragAndDrop": false,
+  // ===== INTEGRATED TERMINAL AYARLARI =====
+  "terminal.integrated.cwd": "${workspaceFolder}",
+  "terminal.integrated.env.windows": {
+    "NODE_ENV": "development"
+  },
+  // ===== DEBUG AYARLARI =====
+  "debug.console.fontSize": 14,
+  "debug.internalConsoleOptions": "neverOpen",
+  // ===== WORKSPACE ÖZEL AYARLARI =====
+  "workbench.colorTheme": "Default Dark+",
+  "workbench.iconTheme": "material-icon-theme",
+  "workbench.startupEditor": "newUntitledFile",
+  // Minimap ayarları (performans için)
+  "editor.minimap.enabled": false,
+  // Satır numaraları
+  "editor.lineNumbers": "on",
+  // Word wrap
+  "editor.wordWrap": "on",
+  // Bracket pair colorization
+  "editor.bracketPairColorization.enabled": true,
+  "editor.guides.bracketPairs": true,
+  // ===== CURSOR ÖZEL AI AYARLARI =====
+  "cursor.chat.contextWindow": 32000,
+  "cursor.chat.includeWorkspaceFiles": true,
+  "cursor.chat.includeOpenFiles": true,
+  "cursor.chat.includeGitHistory": true,
+  // AI kod analizi
+  "cursor.codeAnalysis.includePatterns": [
+    "**/*.ts",
+    "**/*.tsx",
+    "**/*.js",
+    "**/*.jsx"
+  ],
+  // AI öneriler
+  "cursor.suggestions.enabled": true,
+  "cursor.suggestions.autoAccept": false,
+  "cursor.suggestions.showInline": true,
+  // ===== NEXT.JS ÖZEL AYARLARI =====
+  "nextjs.navigation.autoImport": true,
+  "nextjs.suggestions.includePackageJson": true,
+  // ===== PERFORMANS İZLEME =====
+  "telemetry.telemetryLevel": "off",
+  "update.mode": "manual"
+}

@@ -1,0 +1,172 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Quality Check",
+      "type": "shell",
+      "command": "npm",
+      "args": ["run", "quality-check"],
+      "group": "build",
+      "presentation": {
+        "echo": true,
+        "reveal": "always",
+        "focus": false,
+        "panel": "shared",
+        "showReuseMessage": true,
+        "clear": false
+      },
+      "problemMatcher": [
+        {
+          "owner": "typescript",
+          "fileLocation": "relative",
+          "pattern": {
+            "regexp": "^(.*)\\((\\d+,\\d+)\\):\\s+(error|warning)\\s+(.*)$",
+            "file": 1,
+            "location": 2,
+            "severity": 3,
+            "message": 4
+          }
+        },
+        {
+          "owner": "eslint",
+          "fileLocation": "relative",
+          "pattern": {
+            "regexp": "^(.*):(\\d+):(\\d+):\\s+(error|warning)\\s+(.*)$",
+            "file": 1,
+            "line": 2,
+            "column": 3,
+            "severity": 4,
+            "message": 5
+          }
+        }
+      ],
+      "runOptions": {
+        "runOn": "folderOpen"
+      }
+    },
+    {
+      "label": "Type Check",
+      "type": "shell",
+      "command": "npm",
+      "args": ["run", "type-check"],
+      "group": "build",
+      "presentation": {
+        "echo": true,
+        "reveal": "silent",
+        "focus": false,
+        "panel": "shared"
+      },
+      "problemMatcher": [
+        {
+          "owner": "typescript",
+          "fileLocation": "relative",
+          "pattern": {
+            "regexp": "^(.*)\\((\\d+,\\d+)\\):\\s+(error|warning)\\s+(.*)$",
+            "file": 1,
+            "location": 2,
+            "severity": 3,
+            "message": 4
+          }
+        }
+      ]
+    },
+    {
+      "label": "Lint Check",
+      "type": "shell",
+      "command": "npm",
+      "args": ["run", "lint"],
+      "group": "build",
+      "presentation": {
+        "echo": true,
+        "reveal": "silent",
+        "focus": false,
+        "panel": "shared"
+      },
+      "problemMatcher": [
+        {
+          "owner": "eslint",
+          "fileLocation": "relative",
+          "pattern": {
+            "regexp": "^(.*):(\\d+):(\\d+):\\s+(error|warning)\\s+(.*)$",
+            "file": 1,
+            "line": 2,
+            "column": 3,
+            "severity": 4,
+            "message": 5
+          }
+        }
+      ]
+    },
+    {
+      "label": "Format Check",
+      "type": "shell",
+      "command": "npm",
+      "args": ["run", "format:check"],
+      "group": "build",
+      "presentation": {
+        "echo": true,
+        "reveal": "silent",
+        "focus": false,
+        "panel": "shared"
+      }
+    },
+    {
+      "label": "Auto Fix All",
+      "type": "shell",
+      "command": "npm",
+      "args": ["run", "format"],
+      "group": "build",
+      "presentation": {
+        "echo": true,
+        "reveal": "always",
+        "focus": false,
+        "panel": "shared"
+      },
+      "dependsOrder": "sequence",
+      "dependsOn": ["Format Check", "Lint Check"]
+    },
+    {
+      "label": "Full Quality Check with Auto-Fix",
+      "type": "shell",
+      "command": "npm",
+      "args": ["run", "quality-check"],
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      },
+      "presentation": {
+        "echo": true,
+        "reveal": "always",
+        "focus": false,
+        "panel": "shared",
+        "showReuseMessage": true,
+        "clear": false
+      },
+      "problemMatcher": [
+        {
+          "owner": "typescript",
+          "fileLocation": "relative",
+          "pattern": {
+            "regexp": "^(.*)\\((\\d+,\\d+)\\):\\s+(error|warning)\\s+(.*)$",
+            "file": 1,
+            "location": 2,
+            "severity": 3,
+            "message": 4
+          }
+        },
+        {
+          "owner": "eslint",
+          "fileLocation": "relative",
+          "pattern": {
+            "regexp": "^(.*):(\\d+):(\\d+):\\s+(error|warning)\\s+(.*)$",
+            "file": 1,
+            "line": 2,
+            "column": 3,
+            "severity": 4,
+            "message": 5
+          }
+        }
+      ]
+    }
+  ]
+}

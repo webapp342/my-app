@@ -1,5 +1,5 @@
-import { NextRequest, NextResponse } from 'next/server'
-import { supabase } from '@/lib/supabase'
+import { NextRequest, NextResponse } from 'next/server';
+import { supabase } from '@/lib/supabase';
 
 // GET - Get specific virtual card details
 export async function GET(
@@ -7,49 +7,50 @@ export async function GET(
   { params }: { params: Promise<{ cardId: string }> }
 ) {
   try {
-    const { searchParams } = new URL(request.url)
-    const userId = searchParams.get('userId')
-    const { cardId } = await params
+    const { searchParams } = new URL(request.url);
+    const userId = searchParams.get('userId');
+    const { cardId } = await params;
 
     if (!userId || !cardId) {
       return NextResponse.json(
         { error: 'userId and cardId are required' },
         { status: 400 }
-      )
+      );
     }
 
     // Get card details with wallet info
     const { data: card, error } = await supabase
       .from('virtual_cards')
-      .select(`
+      .select(
+        `
         *,
         wallets (
           address,
           network
         )
-      `)
+      `
+      )
       .eq('id', cardId)
       .eq('user_id', userId)
-      .single()
+      .single();
 
     if (error || !card) {
       return NextResponse.json(
         { error: 'Virtual card not found' },
         { status: 404 }
-      )
+      );
     }
 
     return NextResponse.json({
       success: true,
-      card
-    })
-
+      card,
+    });
   } catch (error) {
-    console.error('[VIRTUAL CARD] GET error:', error)
+    console.error('[VIRTUAL CARD] GET error:', error);
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }
-    )
+    );
   }
 }
 
@@ -59,14 +60,14 @@ export async function PUT(
   { params }: { params: Promise<{ cardId: string }> }
 ) {
   try {
-    const { userId, status, dailyLimit, monthlyLimit } = await request.json()
-    const { cardId } = await params
+    const { userId, status, dailyLimit, monthlyLimit } = await request.json();
+    const { cardId } = await params;
 
     if (!userId || !cardId) {
       return NextResponse.json(
         { error: 'userId and cardId are required' },
         { status: 400 }
-      )
+      );
     }
 
     // Verify card belongs to user
@@ -75,22 +76,22 @@ export async function PUT(
       .select('id')
       .eq('id', cardId)
       .eq('user_id', userId)
-      .single()
+      .single();
 
     if (verifyError || !existingCard) {
       return NextResponse.json(
         { error: 'Virtual card not found or access denied' },
         { status: 404 }
-      )
+      );
     }
 
     // Prepare update data
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const updateData: any = {}
-    
-    if (status) updateData.status = status
-    if (dailyLimit !== undefined) updateData.daily_limit = dailyLimit
-    if (monthlyLimit !== undefined) updateData.monthly_limit = monthlyLimit
+    const updateData: any = {};
+
+    if (status) updateData.status = status;
+    if (dailyLimit !== undefined) updateData.daily_limit = dailyLimit;
+    if (monthlyLimit !== undefined) updateData.monthly_limit = monthlyLimit;
 
     // Update card
     const { data: updatedCard, error: updateError } = await supabase
@@ -99,28 +100,27 @@ export async function PUT(
       .eq('id', cardId)
       .eq('user_id', userId)
       .select()
-      .single()
+      .single();
 
     if (updateError) {
-      console.error('[VIRTUAL CARD] Update error:', updateError)
+      console.error('[VIRTUAL CARD] Update error:', updateError);
       return NextResponse.json(
         { error: 'Failed to update virtual card' },
         { status: 500 }
-      )
+      );
     }
 
     return NextResponse.json({
       success: true,
       message: 'Virtual card updated successfully',
-      card: updatedCard
-    })
-
+      card: updatedCard,
+    });
   } catch (error) {
-    console.error('[VIRTUAL CARD] PUT error:', error)
+    console.error('[VIRTUAL CARD] PUT error:', error);
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }
-    )
+    );
   }
 }
 
@@ -130,15 +130,15 @@ export async function DELETE(
   { params }: { params: Promise<{ cardId: string }> }
 ) {
   try {
-    const { searchParams } = new URL(request.url)
-    const userId = searchParams.get('userId')
-    const { cardId } = await params
+    const { searchParams } = new URL(request.url);
+    const userId = searchParams.get('userId');
+    const { cardId } = await params;
 
     if (!userId || !cardId) {
       return NextResponse.json(
         { error: 'userId and cardId are required' },
         { status: 400 }
-      )
+      );
     }
 
     // Update card status to CANCELLED instead of deleting
@@ -148,25 +148,24 @@ export async function DELETE(
       .eq('id', cardId)
       .eq('user_id', userId)
       .select()
-      .single()
+      .single();
 
     if (error || !cancelledCard) {
       return NextResponse.json(
         { error: 'Virtual card not found or access denied' },
         { status: 404 }
-      )
+      );
     }
 
     return NextResponse.json({
       success: true,
-      message: 'Virtual card cancelled successfully'
-    })
-
+      message: 'Virtual card cancelled successfully',
+    });
   } catch (error) {
-    console.error('[VIRTUAL CARD] DELETE error:', error)
+    console.error('[VIRTUAL CARD] DELETE error:', error);
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }
-    )
+    );
   }
-} 
+}
